@@ -2166,10 +2166,127 @@ img {
 }
 
 .legend-route {
-  background: #3b82f6;
+  background: #0d9488;
   border-radius: 2px;
   height: 4px;
   width: 14px;
+}
+
+.legend-route-alt {
+  background: #64748b;
+  border-radius: 2px;
+  height: 4px;
+  width: 14px;
+}
+
+.legend-destination {
+  background: #2563eb;
+}
+
+.driver-trip-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  max-width: min(320px, calc(100% - 24px));
+  pointer-events: auto;
+}
+
+.driver-trip-overlay-inner {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+}
+
+.driver-trip-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.driver-trip-lead {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.driver-trip-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.driver-trip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.driver-trip-btn {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: #0f766e;
+  color: #f8fafc;
+}
+
+.driver-trip-btn:hover {
+  filter: brightness(1.05);
+}
+
+.driver-trip-btn--ghost {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.driver-trip-banner {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.driver-trip-warning {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: #b45309;
+  line-height: 1.4;
+}
+
+.driver-trip-hint {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.driver-trip-foot {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.driver-google-api-note {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* Places Autocomplete dropdown above map overlays */
+.pac-container {
+  z-index: 10050 !important;
 }
 
 .legend-hotspot {

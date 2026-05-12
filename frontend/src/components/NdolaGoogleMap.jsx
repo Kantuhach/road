@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer, Polyline } from '@react-google-maps/api';
+import {
+  GoogleMap,
+  useJsApiLoader,
+  Marker,
+  InfoWindow,
+  DirectionsRenderer,
+  Polyline,
+  Autocomplete
+} from '@react-google-maps/api';
 
-const MAP_LIBRARIES = ['geometry'];
+const MAP_LIBRARIES = ['geometry', 'places'];
 
 export const NDOLA_CENTER = { lat: -12.9697, lng: 28.6367 };
 
@@ -17,6 +25,53 @@ const severityColor = {
   Medium: '#ca8a04',
   Low: '#15803d'
 };
+
+/** Minimum distance from route polyline to each hazard; bottleneck is the smallest over hazards. */
+function scoreRouteClearance(route, hazards) {
+  if (!route?.overview_path?.length || !hazards?.length || !window.google?.maps?.geometry) {
+    return Number.POSITIVE_INFINITY;
+  }
+  let bottleneck = Number.POSITIVE_INFINITY;
+  for (const haz of hazards) {
+    const hz = new google.maps.LatLng(haz.lat, haz.lng);
+    let minSeg = Number.POSITIVE_INFINITY;
+    for (const p of route.overview_path) {
+      minSeg = Math.min(minSeg, google.maps.geometry.spherical.computeDistanceBetween(p, hz));
+    }
+    bottleneck = Math.min(bottleneck, minSeg);
+  }
+  return bottleneck;
+}
+
+function pickSafestDrivingRoute(routes, hazards) {
+  if (!routes?.length || !window.google?.maps?.geometry) {
+    return { best: routes?.[0] ?? null, clearance: 0, altPaths: [] };
+  }
+  if (!hazards?.length) {
+    return {
+      best: routes[0],
+      clearance: Number.POSITIVE_INFINITY,
+      altPaths: routes
+        .slice(1)
+        .map((r) => r.overview_path || [])
+        .filter((p) => p.length > 1)
+    };
+  }
+  let best = routes[0];
+  let bestScore = scoreRouteClearance(best, hazards);
+  for (let i = 1; i < routes.length; i++) {
+    const s = scoreRouteClearance(routes[i], hazards);
+    if (s > bestScore) {
+      bestScore = s;
+      best = routes[i];
+    }
+  }
+  const altPaths = routes
+    .filter((r) => r !== best)
+    .map((r) => r.overview_path || [])
+    .filter((p) => p.length > 1);
+  return { best, clearance: bestScore, altPaths };
+}
 
 function normAccidents(list) {
   return (list || [])
@@ -49,9 +104,11 @@ function NdolaGoogleMapInner({
   onNearbyAccident,
   pickLocationMode = false,
   pickedLatLng = null,
-  onPickLatLng
+  onPickLatLng,
+  tripPlannerEnabled = false,
+  onTripPlannerStatus
 }) {
-  const loaderId = `ndola-map-${googleMapsApiKey.slice(-12)}`;
+  const loaderId = `ndola-map-${googleMapsApiKey.slice(-12)}-geom-places`;
   const { isLoaded, loadError } = useJsApiLoader({
     id: loaderId,
     googleMapsApiKey,
@@ -65,11 +122,63 @@ function NdolaGoogleMapInner({
   const [directionsMessage, setDirectionsMessage] = useState(null);
   const lastNearbyKey = useRef('');
 
+  const [tripDestination, setTripDestination] = useState(null);
+  const [pickDestinationMode, setPickDestinationMode] = useState(false);
+  const [tripHint, setTripHint] = useState(null);
+  const autocompleteRef = useRef(null);
+  const statusCbRef = useRef(onTripPlannerStatus);
+  useEffect(() => {
+    statusCbRef.current = onTripPlannerStatus;
+  }, [onTripPlannerStatus]);
+
   const points = useMemo(() => normAccidents(accidents), [accidents]);
+
+  const hazardsForRouting = useMemo(() => {
+    const list = [];
+    for (const p of points) list.push({ lat: p.lat, lng: p.lng });
+    for (const h of hotspots || []) {
+      const lat = h.latitude ?? h.coordinates?.latitude;
+      const lng = h.longitude ?? h.coordinates?.longitude;
+      if (lat != null && lng != null) list.push({ lat, lng });
+    }
+    return list;
+  }, [points, hotspots]);
+
+  const hazardsFingerprint = useMemo(
+    () => hazardsForRouting.map((h) => `${h.lat.toFixed(5)},${h.lng.toFixed(5)}`).join('|'),
+    [hazardsForRouting]
+  );
+
+  const routingFingerprint = useMemo(() => {
+    if (!tripDestination || !userLoc) return '';
+    const originBucket = `${userLoc.lat.toFixed(3)},${userLoc.lng.toFixed(3)}`;
+    return `${hazardsFingerprint}|${originBucket}|${tripDestination.lat.toFixed(5)}|${tripDestination.lng.toFixed(5)}`;
+  }, [hazardsFingerprint, userLoc, tripDestination]);
+
+  const ndolaSearchBounds = useMemo(() => {
+    if (!isLoaded || !window.google?.maps) return undefined;
+    return new google.maps.LatLngBounds(
+      new google.maps.LatLng(-13.28, 28.32),
+      new google.maps.LatLng(-12.65, 28.92)
+    );
+  }, [isLoaded]);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
+    let cancelled = false;
     navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (!cancelled) {
+          setUserLoc({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 60_000 }
+    );
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLoc({
           lat: pos.coords.latitude,
@@ -77,8 +186,12 @@ function NdolaGoogleMapInner({
         });
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 60_000 }
+      { enableHighAccuracy: true, maximumAge: 30_000 }
     );
+    return () => {
+      cancelled = true;
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   useEffect(() => {
@@ -127,6 +240,71 @@ function NdolaGoogleMapInner({
     }
   }, [hotspots, points, selected]);
 
+  const prevTripDestinationRef = useRef(null);
+  useEffect(() => {
+    if (!tripPlannerEnabled) return;
+    const prev = prevTripDestinationRef.current;
+    prevTripDestinationRef.current = tripDestination;
+    if (prev && !tripDestination) {
+      setDirections(null);
+      setAlternativePaths([]);
+      setTripHint(null);
+    }
+  }, [tripPlannerEnabled, tripDestination]);
+
+  const computeTripRoute = useCallback(() => {
+    if (!tripPlannerEnabled || !isLoaded || !userLoc || !tripDestination || !window.google) return;
+    setDirectionsMessage(null);
+    const service = new google.maps.DirectionsService();
+    service.route(
+      {
+        origin: userLoc,
+        destination: tripDestination,
+        travelMode: google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: true
+      },
+      (result, status) => {
+        if (status !== 'OK' || !result?.routes?.length) {
+          setDirections(null);
+          setAlternativePaths([]);
+          const msg =
+            status !== 'OK'
+              ? `Could not load directions (${status}). Enable Directions API on your Google Cloud key.`
+              : 'No driving routes returned for this trip.';
+          setTripHint(msg);
+          statusCbRef.current?.('Trip routing failed — check API settings.');
+          return;
+        }
+        const { best, clearance, altPaths } = pickSafestDrivingRoute(result.routes, hazardsForRouting);
+        if (!best) return;
+        setAlternativePaths(altPaths);
+        setDirections({
+          ...result,
+          routes: [best]
+        });
+        const WARN_M = 130;
+        if (hazardsForRouting.length && clearance < WARN_M) {
+          const hint = `Stay alert: this path still passes within ~${Math.round(clearance)} m of a hotspot or verified incident.`;
+          setTripHint(hint);
+          statusCbRef.current?.(hint);
+        } else if (hazardsForRouting.length) {
+          const hint = `Safer option among alternatives (~${Math.round(clearance)} m from nearest hazard along this path).`;
+          setTripHint(hint);
+          statusCbRef.current?.('Trip updated — avoiding incidents where alternatives exist.');
+        } else {
+          setTripHint('Driving directions to your destination.');
+          statusCbRef.current?.('Trip plotted.');
+        }
+      }
+    );
+  }, [tripPlannerEnabled, isLoaded, userLoc, tripDestination, hazardsForRouting]);
+
+  useEffect(() => {
+    if (!tripPlannerEnabled || !isLoaded || !tripDestination || !userLoc || !routingFingerprint) return;
+    const timer = window.setTimeout(() => computeTripRoute(), 480);
+    return () => window.clearTimeout(timer);
+  }, [tripPlannerEnabled, isLoaded, routingFingerprint, tripDestination, userLoc, computeTripRoute]);
+
   const computeDetour = useCallback(() => {
     setDirectionsMessage(null);
     setAlternativePaths([]);
@@ -141,6 +319,7 @@ function NdolaGoogleMapInner({
     const hazardLng = selected.lng;
     if (hazardLat == null || hazardLng == null) return;
 
+    const hazards = [{ lat: hazardLat, lng: hazardLng }];
     const service = new google.maps.DirectionsService();
     service.route(
       {
@@ -159,28 +338,12 @@ function NdolaGoogleMapInner({
           );
           return;
         }
-        const hazard = new google.maps.LatLng(hazardLat, hazardLng);
-        let bestRoute = result.routes[0];
-        let bestDist = -1;
-        for (const route of result.routes) {
-          let minSeg = Infinity;
-          (route.overview_path || []).forEach((p) => {
-            const d = google.maps.geometry.spherical.computeDistanceBetween(p, hazard);
-            minSeg = Math.min(minSeg, d);
-          });
-          if (minSeg > bestDist) {
-            bestDist = minSeg;
-            bestRoute = route;
-          }
-        }
-        const altPaths = result.routes
-          .filter((r) => r !== bestRoute)
-          .map((r) => r.overview_path || [])
-          .filter((path) => path.length > 1);
+        const { best, altPaths } = pickSafestDrivingRoute(result.routes, hazards);
+        if (!best) return;
         setAlternativePaths(altPaths);
         setDirections({
           ...result,
-          routes: [bestRoute]
+          routes: [best]
         });
       }
     );
@@ -226,10 +389,25 @@ function NdolaGoogleMapInner({
       .filter(Boolean);
   }, [hotspots, onRoadClick, isLoaded]);
 
+  const tripNavigationActive = Boolean(tripPlannerEnabled && tripDestination);
+
+  const handleAutocompletePlace = () => {
+    const ac = autocompleteRef.current;
+    const place = ac?.getPlace?.();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    setTripDestination({ lat: loc.lat(), lng: loc.lng() });
+    setPickDestinationMode(false);
+    setSelected(null);
+  };
+
   if (loadError) {
     return (
       <div className="map-api-missing">
-        <p>Google Maps failed to load. Confirm your API key in Admin Settings has Maps JavaScript API and Directions API enabled.</p>
+        <p>
+          Google Maps failed to load. Confirm your API key in Admin Settings has Maps JavaScript API, Directions API, and
+          (for address search) Places API enabled.
+        </p>
       </div>
     );
   }
@@ -253,19 +431,89 @@ function NdolaGoogleMapInner({
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: true,
-          draggableCursor: pickLocationMode ? 'crosshair' : undefined,
-          draggingCursor: pickLocationMode ? 'crosshair' : undefined
+          draggableCursor: pickLocationMode || pickDestinationMode ? 'crosshair' : undefined,
+          draggingCursor: pickLocationMode || pickDestinationMode ? 'crosshair' : undefined
         }}
-        onClick={
-          pickLocationMode && onPickLatLng
-            ? (e) => {
-                const latLng = e.latLng;
-                if (!latLng) return;
-                onPickLatLng({ lat: latLng.lat(), lng: latLng.lng() });
-              }
-            : undefined
-        }
+        onClick={(e) => {
+          if (pickLocationMode && onPickLatLng) {
+            const latLng = e.latLng;
+            if (!latLng) return;
+            onPickLatLng({ lat: latLng.lat(), lng: latLng.lng() });
+            return;
+          }
+          if (tripPlannerEnabled && pickDestinationMode && e.latLng) {
+            setTripDestination({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+            setPickDestinationMode(false);
+            setSelected(null);
+          }
+        }}
       >
+        {tripPlannerEnabled && (
+          <div className="driver-trip-overlay">
+            <div className="driver-trip-overlay-inner">
+              <h4 className="driver-trip-title">Your trip</h4>
+              <p className="driver-trip-lead muted">
+                Set where you are going. We pick the driving option that stays farthest from verified incidents and
+                hotspots when Google offers alternatives — routes refresh live when reports change.
+              </p>
+              {ndolaSearchBounds ? (
+                <Autocomplete
+                  onLoad={(ac) => {
+                    autocompleteRef.current = ac;
+                  }}
+                  onPlaceChanged={handleAutocompletePlace}
+                  options={{
+                    bounds: ndolaSearchBounds,
+                    strictBounds: false,
+                    fields: ['geometry', 'name', 'formatted_address']
+                  }}
+                >
+                  <input
+                    type="text"
+                    className="driver-trip-search-input"
+                    placeholder="Search address or place (Places API)…"
+                    aria-label="Destination search"
+                  />
+                </Autocomplete>
+              ) : null}
+              <div className="driver-trip-actions">
+                <button
+                  type="button"
+                  className="driver-trip-btn"
+                  onClick={() => setPickDestinationMode((v) => !v)}
+                >
+                  {pickDestinationMode ? 'Cancel pin on map' : 'Drop pin on map'}
+                </button>
+                {tripDestination ? (
+                  <button
+                    type="button"
+                    className="driver-trip-btn driver-trip-btn--ghost"
+                    onClick={() => {
+                      setTripDestination(null);
+                      setPickDestinationMode(false);
+                      setDirections(null);
+                      setAlternativePaths([]);
+                      setTripHint(null);
+                    }}
+                  >
+                    Clear trip
+                  </button>
+                ) : null}
+              </div>
+              {pickDestinationMode ? (
+                <p className="driver-trip-banner">Tap the map to set your destination pin.</p>
+              ) : null}
+              {!userLoc && tripDestination ? (
+                <p className="driver-trip-warning">Allow location access so we can route from your current position.</p>
+              ) : null}
+              {tripHint ? <p className="driver-trip-hint">{tripHint}</p> : null}
+              <p className="driver-trip-foot muted">
+                Needs Directions API. Address search needs Places API (optional — pin on map always works).
+              </p>
+            </div>
+          </div>
+        )}
+
         {userLoc && (
           <Marker
             position={userLoc}
@@ -275,6 +523,27 @@ function NdolaGoogleMapInner({
               fillColor: '#fbbf24',
               fillOpacity: 1,
               strokeColor: '#92400e',
+              strokeWeight: 2
+            }}
+          />
+        )}
+
+        {tripPlannerEnabled && tripDestination && (
+          <Marker
+            position={tripDestination}
+            draggable
+            onDragEnd={(e) => {
+              const ll = e.latLng;
+              if (!ll) return;
+              setTripDestination({ lat: ll.lat(), lng: ll.lng() });
+              setSelected(null);
+            }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 11,
+              fillColor: '#2563eb',
+              fillOpacity: 1,
+              strokeColor: '#1e3a8a',
               strokeWeight: 2
             }}
           />
@@ -367,30 +636,50 @@ function NdolaGoogleMapInner({
                   <strong>Hotspot · {selected.name}</strong>
                   <div>Severity: {selected.severity}</div>
                   {selected.timePattern ? <div className="gm-info-muted">{selected.timePattern}</div> : null}
-                  <p className="gm-info-hint">
-                    Teal line is the suggested path (keeps farther from this hotspot). Gray lines are other driving options when Google returns more than one route.
-                  </p>
-                  {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
-                  <div style={{ marginTop: 8 }}>
-                    <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
-                      Show alternate routes
-                    </button>
-                  </div>
+                  {tripNavigationActive ? (
+                    <p className="gm-info-hint">
+                      Trip navigation is on — your route refreshes automatically using live incidents. Use Clear trip to use
+                      hub detours from here instead.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="gm-info-hint">
+                        Teal line is the suggested path (keeps farther from this hotspot). Gray lines are other driving
+                        options when Google returns more than one route.
+                      </p>
+                      {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
+                      <div style={{ marginTop: 8 }}>
+                        <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
+                          Show alternate routes
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
                   <strong>{selected.roadName}</strong>
                   <div>{selected.town}</div>
                   <div>Severity: {selected.severity}</div>
-                  <p className="gm-info-hint">
-                    Teal line prefers staying farthest from this incident; gray lines show other returned routes when Google offers them.
-                  </p>
-                  {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
-                  <div style={{ marginTop: 8 }}>
-                    <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
-                      Show alternate routes
-                    </button>
-                  </div>
+                  {tripNavigationActive ? (
+                    <p className="gm-info-hint">
+                      Trip navigation is on — routes already avoid verified incidents when alternatives exist. Close this
+                      panel or clear the trip to plot a one-off detour toward the city hub.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="gm-info-hint">
+                        Teal line prefers staying farthest from this incident; gray lines show other returned routes when
+                        Google offers them.
+                      </p>
+                      {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
+                      <div style={{ marginTop: 8 }}>
+                        <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
+                          Show alternate routes
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -399,29 +688,37 @@ function NdolaGoogleMapInner({
       </GoogleMap>
 
       {!pickLocationMode && (
-      <div className="map-legend-panel">
-        <div className="map-legend-title">Legend</div>
-        <ul className="map-legend-list">
-          <li>
-            <span className="legend-dot legend-accident-critical" /> Critical / High
-          </li>
-          <li>
-            <span className="legend-dot legend-accident-medium" /> Medium
-          </li>
-          <li>
-            <span className="legend-dot legend-accident-low" /> Low
-          </li>
-          <li>
-            <span className="legend-dot legend-route" /> Detour route
-          </li>
-          <li>
-            <span className="legend-dot legend-hotspot" /> Hotspot
-          </li>
-          <li>
-            <span className="legend-dot legend-you" /> You
-          </li>
-        </ul>
-      </div>
+        <div className="map-legend-panel">
+          <div className="map-legend-title">Legend</div>
+          <ul className="map-legend-list">
+            <li>
+              <span className="legend-dot legend-accident-critical" /> Critical / High
+            </li>
+            <li>
+              <span className="legend-dot legend-accident-medium" /> Medium
+            </li>
+            <li>
+              <span className="legend-dot legend-accident-low" /> Low
+            </li>
+            <li>
+              <span className="legend-dot legend-route" /> Trip / detour route
+            </li>
+            <li>
+              <span className="legend-dot legend-route-alt" /> Other driving option
+            </li>
+            <li>
+              <span className="legend-dot legend-hotspot" /> Hotspot
+            </li>
+            <li>
+              <span className="legend-dot legend-you" /> You
+            </li>
+            {tripPlannerEnabled ? (
+              <li>
+                <span className="legend-dot legend-destination" /> Trip destination
+              </li>
+            ) : null}
+          </ul>
+        </div>
       )}
     </div>
   );

@@ -6,8 +6,6 @@ const { verifyToken, requireAdmin, JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
 
-const router = express.Router();
-
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;

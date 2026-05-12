@@ -284,6 +284,8 @@ export default function Dashboard({ user, onLogout }) {
             googleMapsApiKey={googleMapsApiKey || undefined}
             hotspots={hotspots}
             accidents={accidents}
+            tripPlannerEnabled
+            onTripPlannerStatus={setStatusMessage}
             onRoadClick={handleRoadClick}
             onNearbyAccident={handleNearbyAccidents}
           />
@@ -308,9 +310,14 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="driver-panel driver-panel--tips">
-            <h3 className="driver-panel__title">Detours &amp; tips</h3>
+            <h3 className="driver-panel__title">Navigation &amp; Google APIs</h3>
             <p className="driver-panel__body">
-              Submit an incident from <strong>Report incident</strong> to help everyone reroute. Verified reports appear on the map for all drivers.
+              Use <strong>Your trip</strong> on the map to search or drop a destination. We request alternative driving routes from Google, then prefer the option that stays farthest from verified incidents and hotspots when multiple routes exist. Your trip redraws when live incidents change (same WebSocket feed as the pins).
+            </p>
+            <p className="driver-panel__body muted driver-google-api-note">
+              In Google Cloud Console, enable billing and APIs on the same key used in Admin → Settings:{' '}
+              <strong>Maps JavaScript API</strong>, <strong>Directions API</strong>, and optionally{' '}
+              <strong>Places API</strong> (address search). Restrict the key by HTTP referrer for production.
             </p>
           </div>
         </aside>

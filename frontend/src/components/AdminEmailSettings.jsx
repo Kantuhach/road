@@ -13,6 +13,17 @@ const emptyForm = {
   adminNotifyEmail: ''
 };
 
+function formatSaveError(err) {
+  const data = err.response?.data;
+  if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+  if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+  if (err.response?.status === 401) return 'Session expired — sign in again as admin.';
+  if (err.response?.status === 403) return 'Admin access required.';
+  if (err.response?.status === 404) return 'API not found — is the backend running and /api proxied correctly?';
+  if (!err.response) return err.message || 'Network error — check connection and try again.';
+  return `Save failed (${err.response.status}).`;
+}
+
 export default function AdminEmailSettings({ authToken }) {
   const [form, setForm] = useState(emptyForm);
   const [hasSmtpPassword, setHasSmtpPassword] = useState(false);
@@ -78,7 +89,7 @@ export default function AdminEmailSettings({ authToken }) {
       if (form.smtpPassword.trim()) setHasSmtpPassword(true);
       setForm((f) => ({ ...f, smtpPassword: '' }));
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Save failed.');
+      setMessage(formatSaveError(err));
     } finally {
       setSaving(false);
     }
@@ -91,7 +102,7 @@ export default function AdminEmailSettings({ authToken }) {
       await axios.post('/api/settings/email/test', { to: testTo.trim() }, { headers });
       setMessage(`Test email sent to ${testTo.trim()}.`);
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Test send failed.');
+      setMessage(formatSaveError(err));
     } finally {
       setTesting(false);
     }
@@ -115,7 +126,7 @@ export default function AdminEmailSettings({ authToken }) {
       {loading ? (
         <p className="muted">Loading…</p>
       ) : (
-        <form className="settings-map-form admin-email-form" onSubmit={save}>
+        <form className="settings-map-form admin-email-form" onSubmit={save} noValidate>
           <label className="settings-label checkbox-inline">
             <input
               type="checkbox"
@@ -163,8 +174,19 @@ export default function AdminEmailSettings({ authToken }) {
               <input
                 className="settings-input"
                 type="number"
+                min={1}
+                max={65535}
+                step={1}
                 value={form.smtpPort}
-                onChange={(e) => setForm({ ...form, smtpPort: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    setForm({ ...form, smtpPort: 587 });
+                    return;
+                  }
+                  const n = parseInt(v, 10);
+                  setForm({ ...form, smtpPort: Number.isFinite(n) ? n : 587 });
+                }}
               />
             </label>
           </div>
@@ -222,7 +244,17 @@ export default function AdminEmailSettings({ authToken }) {
             </button>
           </div>
 
-          {message && <p className={`settings-feedback ${message.includes('fail') || message.includes('Could not') ? 'error' : 'success'}`}>{message}</p>}
+          {message && (
+            <p
+              className={`settings-feedback ${
+                /fail|Fail|error|Could not|expired|required|Network|not found|Unable|403|401/i.test(message)
+                  ? 'error'
+                  : 'success'
+              }`}
+            >
+              {message}
+            </p>
+          )}
         </form>
       )}
     </section>
