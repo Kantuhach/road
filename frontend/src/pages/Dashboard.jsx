@@ -4,13 +4,7 @@ import axios from 'axios';
 import NdolaGoogleMap from '../components/NdolaGoogleMap';
 import DriverShell from '../components/DriverShell';
 import websocketService from '../services/websocketService';
-import { IconAlertTriangle, IconCircleLive } from '../components/Icons';
-
-const severityColor = {
-  Low: 'green',
-  Medium: 'orange',
-  High: '#ff9800'
-};
+import { IconAlertTriangle, IconCircleLive, IconMapPin } from '../components/Icons';
 
 export default function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
@@ -180,9 +174,23 @@ export default function Dashboard({ user, onLogout }) {
     setStatusMessage(`Calculating alternative route for ${roadName}...`);
   };
 
+  const activeIncidentCount = useMemo(
+    () => accidents.filter((a) => a.status !== 'resolved' && a.status !== 'cleared').length,
+    [accidents]
+  );
+
+  const wsChipClass =
+    wsConnection === 'connected'
+      ? 'driver-chip driver-chip--live driver-chip--live-on'
+      : wsConnection === 'disconnected'
+        ? 'driver-chip driver-chip--live driver-chip--live-off'
+        : 'driver-chip driver-chip--live driver-chip--live-muted';
+
   return (
     <DriverShell user={user} onLogout={onLogout}>
-      <div className={`driver-dashboard-inner${showProximityAlert && nearbyAccidents.length > 0 ? ' driver-dashboard-inner--alert' : ''}`}>
+      <div
+        className={`driver-view driver-dashboard-inner${showProximityAlert && nearbyAccidents.length > 0 ? ' driver-dashboard-inner--alert' : ''}`}
+      >
       {showProximityAlert && nearbyAccidents.length > 0 && (
         <div className="driver-proximity-banner" role="alert">
           <div className="driver-proximity-banner__inner">
@@ -203,63 +211,62 @@ export default function Dashboard({ user, onLogout }) {
         </div>
       )}
 
-      <header className="dashboard-header dashboard-header--driver">
-        <div>
-          <h1>Driver dashboard</h1>
-          <p>Welcome back, {user.username}. Share updates and stay ahead of route disruptions.</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-            <span
-              style={{
-                padding: '2px 8px',
-                borderRadius: '12px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                background: wsConnection === 'connected' ? '#22c55e' : wsConnection === 'disconnected' ? '#ef4444' : '#6b7280',
-                color: 'white',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
+      <header className="driver-view__hero">
+        <div className="driver-view__hero-main">
+          <p className="driver-view__eyebrow">Ndola · Road safety</p>
+          <h1 className="driver-view__title">Your dashboard</h1>
+          <p className="driver-view__lead">
+            Hi <strong>{user.username}</strong> — live map, corridor reference, and reports in one place.
+          </p>
+          <div className="driver-badge-row">
+            <span className={wsChipClass}>
               <IconCircleLive />
               {wsConnection === 'connected'
                 ? 'Live updates'
                 : wsConnection === 'disconnected'
                   ? 'Reconnecting…'
-                  : 'Offline'}
+                  : 'Connecting…'}
             </span>
-            {accidents.filter(a => a.status !== 'resolved').length > 0 && (
-              <span style={{
-                padding: '2px 8px',
-                borderRadius: '12px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                background: '#ef4444',
-                color: 'white',
-                animation: 'pulse 2s infinite'
-              }}>
-                {accidents.filter(a => a.status !== 'resolved').length} Active Accident{accidents.filter(a => a.status !== 'resolved').length > 1 ? 's' : ''}
+            {activeIncidentCount > 0 && (
+              <span className="driver-chip driver-chip--alert">
+                {activeIncidentCount} active incident{activeIncidentCount > 1 ? 's' : ''}
               </span>
             )}
           </div>
         </div>
+        <div className="driver-view__hero-actions">
+          <button type="button" className="btn btn-primary driver-btn-cta" onClick={() => navigate('/report')}>
+            Report incident
+          </button>
+        </div>
       </header>
 
-      <main className="dashboard-grid">
-        <section className="map-card">
-          <div className="map-header">
+      <div className="driver-quick-stats" aria-label="Quick statistics">
+        <div className="driver-stat-tile">
+          <span className="driver-stat-tile__label">Open incidents</span>
+          <span className="driver-stat-tile__value">{activeIncidentCount}</span>
+        </div>
+        <div className="driver-stat-tile">
+          <span className="driver-stat-tile__label">Hotspots</span>
+          <span className="driver-stat-tile__value">{hotspots.length}</span>
+        </div>
+        <div className="driver-stat-tile">
+          <span className="driver-stat-tile__label">Reports loaded</span>
+          <span className="driver-stat-tile__value">{accidents.length}</span>
+        </div>
+      </div>
+
+      <div className="driver-view__split">
+        <section className="map-card driver-map-card">
+          <div className="map-header driver-map-header">
             <div>
-              <h2>Ndola Road Network Map</h2>
-              <p>{statusMessage}</p>
+              <h2>Road network map</h2>
+              <p className="driver-map-status muted">{statusMessage}</p>
               {selectedRoad && (
-                <p className="selected-road">Selected: <strong>{selectedRoad}</strong></p>
+                <p className="selected-road">
+                  Route focus: <strong>{selectedRoad}</strong>
+                </p>
               )}
-            </div>
-            <div className="dashboard-actions">
-              <div className="user-badge">Signed in as {user.username}</div>
-              <button className="btn btn-primary" onClick={() => navigate('/report')}>
-                Report an accident
-              </button>
             </div>
           </div>
 
@@ -272,40 +279,44 @@ export default function Dashboard({ user, onLogout }) {
           />
         </section>
 
-        <section className="info-card">
-          <div className="panel">
-            <h3>Roads by Town</h3>
-            <div className="town-list">
+        <aside className="driver-side-stack">
+          <div className="driver-panel driver-panel--reference">
+            <h3 className="driver-panel__title">Roads by town</h3>
+            <p className="driver-panel__hint muted">Quick reference while you drive.</p>
+            <div className="town-list driver-town-list">
               {Object.entries(townRoads).map(([town, roads]) => (
-                <div key={town} className="town-card">
-                  <strong>{town}</strong>
+                <details key={town} className="driver-town-disclosure">
+                  <summary>{town}</summary>
                   <ul>
                     {roads.map((road) => (
                       <li key={road}>{road}</li>
                     ))}
                   </ul>
-                </div>
+                </details>
               ))}
             </div>
           </div>
 
-          <div className="panel">
-            <h3>Suggested detours</h3>
-            <div className="suggestions-list">
-              <p>Use the report page to submit incidents and get updated alternate route guidance.</p>
-            </div>
+          <div className="driver-panel driver-panel--tips">
+            <h3 className="driver-panel__title">Detours &amp; tips</h3>
+            <p className="driver-panel__body">
+              Submit an incident from <strong>Report incident</strong> to help everyone reroute. Verified reports appear on the map for all drivers.
+            </p>
           </div>
-        </section>
-      </main>
+        </aside>
+      </div>
 
-      <section className="reporting-row">
-        <div className="reports-card">
-          <h2>Recent Accident Reports</h2>
+      <section className="driver-section">
+        <div className="driver-section__head">
+          <h2 className="driver-section__title">Recent reports</h2>
+          <span className="driver-section__meta muted">{accidents.length} total</span>
+        </div>
+        <div className="reports-card driver-reports-card">
           {accidents.length === 0 ? (
-            <p>No recent reports yet. Report the first incident on your route.</p>
+            <p className="driver-empty muted">No reports yet. Be the first to flag an incident on your route.</p>
           ) : (
             accidents.map((report) => (
-              <div key={report.id} className="accident-card">
+              <div key={report.id ?? report._id} className="accident-card driver-accident-card">
                 <div className="accident-header">
                   <div>
                     <h3>{report.roadName}</h3>
@@ -345,16 +356,25 @@ export default function Dashboard({ user, onLogout }) {
         </div>
       </section>
 
-      <section className="action-row">
-        <aside className="panel hotspot-panel">
+      <section className="driver-section driver-hotspots-section">
+        <div className="driver-section__head">
+          <h2 className="driver-section__title">
+            <span className="driver-section__title-icon svg-icon-wrap" aria-hidden>
+              <IconMapPin />
+            </span>
+            High-risk hotspots
+          </h2>
+          <button type="button" className="btn btn-secondary btn-compact" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            Back to map
+          </button>
+        </div>
+        <aside className="driver-hotspot-panel hotspot-panel">
           <div className="hotspot-panel-header">
             <div>
-              <h3>High-Risk Accident Hotspots</h3>
-              <p>Critical locations with repeated incidents and the strongest driver alerts.</p>
+              <p className="muted driver-hotspot-lead">
+                Critical corridors — watch for alerts and slowdowns in these zones.
+              </p>
             </div>
-            <button className="btn btn-secondary" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              Refresh view
-            </button>
           </div>
 
           <div className="hotspot-grid">

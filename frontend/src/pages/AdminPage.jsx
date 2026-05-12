@@ -6,8 +6,6 @@ import AccidentVerificationPanel from '../components/AccidentVerificationPanel';
 import AdminMapSettings from '../components/AdminMapSettings';
 import {
   IconShield,
-  IconUser,
-  IconLock,
   IconLogout,
   IconChart,
   IconAlertTriangle,

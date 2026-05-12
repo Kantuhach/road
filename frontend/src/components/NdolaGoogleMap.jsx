@@ -7,7 +7,7 @@ export const NDOLA_CENTER = { lat: -12.9697, lng: 28.6367 };
 
 const containerStyle = {
   width: '100%',
-  height: 'min(58vh, 520px)',
+  height: 'min(62vh, 600px)',
   borderRadius: '16px'
 };
 

@@ -115,19 +115,22 @@ export default function ReportPage({ user, onLogout }) {
 
   return (
     <DriverShell user={user} onLogout={onLogout}>
-      <div className="driver-dashboard-inner driver-report-inner">
-      <header className="dashboard-header dashboard-header--driver">
-        <div>
-          <h1>Accident report</h1>
-          <p>{statusMessage}</p>
-        </div>
-      </header>
+      <div className="driver-view driver-report-inner">
+        <header className="driver-view__hero driver-report-hero">
+          <div className="driver-view__hero-main">
+            <p className="driver-view__eyebrow">Submit evidence</p>
+            <h1 className="driver-view__title">Report an incident</h1>
+            <p className="driver-view__lead muted">{statusMessage}</p>
+          </div>
+        </header>
 
-      <main className="dashboard-grid">
-        <section className="report-card">
-          <h2>Submit a report</h2>
-          <p>Share the location, road, and photo evidence so responders can verify and publish alerts.</p>
-          <form className="report-form" onSubmit={handleSubmit}>
+        <main className="driver-view__split driver-report-split">
+          <section className="report-card driver-report-main-card">
+            <h2 className="driver-panel__title">Incident details</h2>
+            <p className="driver-panel__hint muted">
+              Location, description, and a scene photo help admins verify and publish alerts.
+            </p>
+          <form className="report-form driver-report-form" onSubmit={handleSubmit}>
             <label>
               Town
               <select
@@ -156,29 +159,31 @@ export default function ReportPage({ user, onLogout }) {
               </select>
             </label>
 
-            <label>
-              Latitude
-              <input
-                type="number"
-                step="any"
-                value={reportForm.latitude}
-                onChange={(e) =>
-                  setReportForm((current) => ({ ...current, latitude: parseFloat(e.target.value) }))
-                }
-              />
-            </label>
+            <div className="driver-form-row-pair">
+              <label>
+                Latitude
+                <input
+                  type="number"
+                  step="any"
+                  value={reportForm.latitude}
+                  onChange={(e) =>
+                    setReportForm((current) => ({ ...current, latitude: parseFloat(e.target.value) }))
+                  }
+                />
+              </label>
 
-            <label>
-              Longitude
-              <input
-                type="number"
-                step="any"
-                value={reportForm.longitude}
-                onChange={(e) =>
-                  setReportForm((current) => ({ ...current, longitude: parseFloat(e.target.value) }))
-                }
-              />
-            </label>
+              <label>
+                Longitude
+                <input
+                  type="number"
+                  step="any"
+                  value={reportForm.longitude}
+                  onChange={(e) =>
+                    setReportForm((current) => ({ ...current, longitude: parseFloat(e.target.value) }))
+                  }
+                />
+              </label>
+            </div>
 
             <label>
               Description
@@ -197,36 +202,37 @@ export default function ReportPage({ user, onLogout }) {
             {photoPreview && <img className="photo-preview" src={photoPreview} alt="Accident preview" />}
 
             {submitError && <p className="form-status error">{submitError}</p>}
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary driver-btn-cta">
               Submit report
             </button>
           </form>
         </section>
 
-        <section className="info-card">
-          <div className="panel">
-            <h3>Route recommendations</h3>
-            <div className="suggestions-list">
-              {routeSuggestions.length === 0 ? (
-                <p>Choose a town to load nearby alternate routes.</p>
-              ) : (
-                routeSuggestions.map((route, index) => (
-                  <div key={index} className="suggestion-item">
-                    {route}
-                  </div>
-                ))
-              )}
+        <aside className="driver-side-stack driver-report-aside">
+            <div className="driver-panel driver-panel--routes">
+              <h3 className="driver-panel__title">Route recommendations</h3>
+              <p className="driver-panel__hint muted">Updates when you change town.</p>
+              <div className="suggestions-list driver-suggestions">
+                {routeSuggestions.length === 0 ? (
+                  <p className="muted">Choose a town to load nearby alternate routes.</p>
+                ) : (
+                  routeSuggestions.map((route, index) => (
+                    <div key={index} className="suggestion-item driver-suggestion-chip">
+                      {route}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-          <div className="panel">
-            <h3>Report tips</h3>
-            <ul>
-              <li>Use clear road names and exact town location.</li>
-              <li>Attach a photo when there is visible obstruction or damage.</li>
-              <li>Keep descriptions short and factual.</li>
-            </ul>
-          </div>
-        </section>
+            <div className="driver-panel driver-panel--checklist">
+              <h3 className="driver-panel__title">Before you send</h3>
+              <ul className="driver-checklist">
+                <li>Clear road name and correct town</li>
+                <li>Photo shows obstruction or scene context</li>
+                <li>Short, factual description</li>
+              </ul>
+            </div>
+          </aside>
       </main>
       </div>
     </DriverShell>
