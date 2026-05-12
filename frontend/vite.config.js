@@ -1,6 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+/** Dev server & `vite preview` — forward API/WebSocket/uploads to the Node backend (default port 8080). */
+const devBackendProxy = {
+  '/api': {
+    target: 'http://localhost:8080',
+    changeOrigin: true
+  },
+  '/ws/accidents': {
+    target: 'http://localhost:8080',
+    ws: true,
+    changeOrigin: true
+  },
+  '/uploads': {
+    target: 'http://localhost:8080',
+    changeOrigin: true
+  }
+};
+
 export default defineConfig({
   plugins: [
     react(),
@@ -21,20 +38,9 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
-      },
-      '/ws/accidents': {
-        target: 'http://localhost:8080',
-        ws: true,
-        changeOrigin: true
-      },
-      '/uploads': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
-      }
-    }
+    proxy: devBackendProxy
+  },
+  preview: {
+    proxy: devBackendProxy
   }
 });

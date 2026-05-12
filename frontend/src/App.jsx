@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { apiUrl } from './apiConfig';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
@@ -27,14 +28,13 @@ export default function App() {
   const handleAuth = async ({ mode, username, password, email }) => {
     setAuthError('');
     try {
-      const url =
-        mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const path = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const payload = {
         username,
         password,
         ...(mode === 'register' ? { email } : {})
       };
-      const response = await fetch(url, {
+      const response = await fetch(apiUrl(path), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

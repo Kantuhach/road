@@ -29,6 +29,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/accidents', accidentRoutes);
 app.use('/api/hotspots', hotspotRoutes);
 app.use('/api/settings', settingsRoutes);
+/** Same router — some reverse proxies send `/settings/*` when stripping `/api` from `/api/settings/*`. */
+app.use('/settings', settingsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

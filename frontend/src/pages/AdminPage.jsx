@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { apiUrl } from '../apiConfig';
 import HotspotAdmin from '../components/HotspotAdmin';
 import AccidentVerificationPanel from '../components/AccidentVerificationPanel';
 import AdminMapSettings from '../components/AdminMapSettings';
@@ -110,7 +111,7 @@ export default function AdminPage({ appUser, setAppUser }) {
     event.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: form.username.trim(), password: form.password })
