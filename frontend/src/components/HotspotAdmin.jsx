@@ -47,7 +47,8 @@ export default function HotspotAdmin({ hotspots, onHotspotSaved, onHotspotDelete
         ? await axios.put(`/api/hotspots/${selectedId}`, payload)
         : await axios.post('/api/hotspots', payload);
 
-      onHotspotSaved(response.data);
+      const raw = response.data?.hotspot ?? response.data;
+      onHotspotSaved(raw);
       setStatus(selectedId ? 'Hotspot updated successfully.' : 'Hotspot added successfully.');
       clearForm();
     } catch (error) {

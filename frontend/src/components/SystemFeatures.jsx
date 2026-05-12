@@ -517,7 +517,7 @@ const SystemFeatures = () => {
             color: '#0c4a6e',
             marginBottom: '15px'
           }}>
-            🚗 Advanced Navigation & Safety Features
+            Advanced navigation & safety features
           </h3>
           <p style={{
             fontSize: '1rem',

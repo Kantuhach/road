@@ -1,21 +1,21 @@
 :root {
   color-scheme: light;
-  font-family: Inter, system-ui, system-ui, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: Inter, system-ui, sans-serif;
+  background: linear-gradient(165deg, #0f766e 0%, #134e4a 45%, #0f172a 100%);
   color: #0f172a;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --secondary: #f59e0b;
-  --secondary-hover: #d97706;
-  --accent: #10b981;
-  --accent-hover: #059669;
+  --primary: #0d9488;
+  --primary-hover: #0f766e;
+  --secondary: #ea580c;
+  --secondary-hover: #c2410c;
+  --accent: #059669;
+  --accent-hover: #047857;
   --neutral: #f8fafc;
   --neutral-dark: #e2e8f0;
   --text: #0f172a;
   --text-muted: #64748b;
   --border: #cbd5e1;
-  --shadow: rgba(15, 23, 42, 0.1);
-  --shadow-strong: rgba(15, 23, 42, 0.15);
+  --shadow: rgba(15, 23, 42, 0.08);
+  --shadow-strong: rgba(15, 23, 42, 0.12);
 }
 
 * {
@@ -25,7 +25,7 @@
 body, html, #root {
   margin: 0;
   min-height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(165deg, #0f766e 0%, #134e4a 45%, #0f172a 100%);
   color: var(--text);
 }
 
@@ -58,7 +58,7 @@ img {
 
 .landing-shell {
   padding: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(165deg, #0f766e 0%, #134e4a 40%, #1e293b 100%);
   min-height: 100vh;
 }
 
@@ -2056,3 +2056,176 @@ img {
   margin-top: 8px;
 }
 
+/* ============ GOOGLE MAP + ICON UTILITIES ============ */
+
+.svg-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  color: inherit;
+}
+
+.svg-icon-wrap svg {
+  width: 1.25em;
+  height: 1.25em;
+}
+
+.svg-icon-auth svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.section-heading-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.section-heading-icon {
+  display: inline-flex;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.svg-alert-banner svg {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+
+.map-api-missing,
+.map-loading {
+  padding: 24px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+
+.map-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.google-map-wrap {
+  position: relative;
+}
+
+.map-legend-panel {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e2e8f0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  z-index: 2;
+  max-width: 220px;
+  pointer-events: none;
+}
+
+.map-legend-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #5eead4;
+}
+
+.map-legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.map-legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-accident-critical {
+  background: #b91c1c;
+}
+
+.legend-accident-medium {
+  background: #ca8a04;
+}
+
+.legend-accident-low {
+  background: #15803d;
+}
+
+.legend-route {
+  background: #3b82f6;
+  border-radius: 2px;
+  height: 4px;
+  width: 14px;
+}
+
+.legend-hotspot {
+  background: #0ea5e9;
+}
+
+.legend-you {
+  background: #fbbf24;
+}
+
+.map-detour-btn {
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.gm-info {
+  color: #0f172a;
+  font-size: 13px;
+  min-width: 180px;
+}
+
+.verification-help {
+  color: #64748b;
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.verification-section-title {
+  margin: 28px 0 8px;
+  font-size: 1.15rem;
+  color: var(--primary);
+}
+
+.btn-secondary-admin {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: white;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+
+.btn-secondary-admin:hover {
+  background: var(--neutral-dark);
+}
+
+.rtsa-icon svg,
+.rtsa-icon-large svg,
+.stat-icon svg {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.rtsa-icon-large svg {
+  width: 2.75rem;
+  height: 2.75rem;
+}

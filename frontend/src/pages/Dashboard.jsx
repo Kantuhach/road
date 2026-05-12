@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import NdolaMap from '../components/NdolaMap';
+import NdolaGoogleMap from '../components/NdolaGoogleMap';
 import websocketService from '../services/websocketService';
+import { IconAlertTriangle, IconCircleLive } from '../components/Icons';
 
 const severityColor = {
   Low: 'green',
@@ -64,27 +65,39 @@ export default function Dashboard({ user, onLogout }) {
       websocketService.on('message', (data) => {
         try {
           if (data.type === 'ACCIDENT_REPORTED') {
-            // Add new accident to the list
-            setAccidents(prev => [data.accident, ...prev]);
+            const incoming = data.accident;
+            setAccidents((prev) => {
+              const exists = prev.some(
+                (p) => String(p.id) === String(incoming.id) || String(p._id) === String(incoming.id)
+              );
+              if (exists) return prev;
+              return [incoming, ...prev];
+            });
             setStatusMessage('New accident reported! Updating map...');
             
             // Show notification
             showAccidentNotification(data.accident);
           } else if (data.type === 'ACCIDENT_CLEARED') {
             // Update accident status
-            setAccidents(prev => prev.map(acc => 
-              acc.id === data.accidentId 
-                ? { ...acc, status: 'resolved' }
-                : acc
-            ));
+            setAccidents((prev) =>
+              prev.map((acc) =>
+                String(acc.id) === String(data.accidentId) || String(acc._id) === String(data.accidentId)
+                  ? { ...acc, status: 'resolved' }
+                  : acc
+              )
+            );
             setStatusMessage('Accident resolved! Route updated...');
           } else if (data.type === 'ACCIDENT_UPDATE') {
-            // Update existing accident
-            setAccidents(prev => prev.map(acc => 
-              acc.id === data.accident.id 
-                ? data.accident
-                : acc
-            ));
+            const updated = data.accident;
+            setAccidents((prev) => {
+              const idx = prev.findIndex(
+                (acc) => String(acc.id) === String(updated.id) || String(acc._id) === String(updated.id)
+              );
+              if (idx === -1) return [updated, ...prev];
+              const copy = [...prev];
+              copy[idx] = updated;
+              return copy;
+            });
             setStatusMessage('Accident information updated...');
           }
         } catch (error) {
@@ -144,7 +157,8 @@ export default function Dashboard({ user, onLogout }) {
   const loadAccidents = async () => {
     try {
       const response = await axios.get('/api/accidents');
-      setAccidents(response.data);
+      const list = response.data.accidents ?? response.data;
+      setAccidents(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error(error);
     }
@@ -177,9 +191,11 @@ export default function Dashboard({ user, onLogout }) {
           animation: 'slideDown 0.3s ease-out'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <span className="svg-icon-wrap svg-alert-banner" aria-hidden>
+              <IconAlertTriangle />
+            </span>
             <div>
-              <strong>⚠️ ACCIDENT ALERT</strong>
+              <strong>ACCIDENT ALERT</strong>
               <div style={{ fontSize: '12px', opacity: 0.9 }}>
                 {nearbyAccidents.length} accident{nearbyAccidents.length > 1 ? 's' : ''} detected within 500m of your location!
               </div>
@@ -209,15 +225,25 @@ export default function Dashboard({ user, onLogout }) {
           <h1>Driver Dashboard</h1>
           <p>Welcome back, {user.username}. Share updates and stay ahead of route disruptions.</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-            <span style={{
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              background: wsConnection === 'connected' ? '#22c55e' : wsConnection === 'disconnected' ? '#ef4444' : '#6b7280',
-              color: 'white'
-            }}>
-              {wsConnection === 'connected' ? '🟢 Live Updates' : wsConnection === 'disconnected' ? '🔴 Reconnecting...' : '⚪ Offline'}
+            <span
+              style={{
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                background: wsConnection === 'connected' ? '#22c55e' : wsConnection === 'disconnected' ? '#ef4444' : '#6b7280',
+                color: 'white',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <IconCircleLive />
+              {wsConnection === 'connected'
+                ? 'Live updates'
+                : wsConnection === 'disconnected'
+                  ? 'Reconnecting…'
+                  : 'Offline'}
             </span>
             {accidents.filter(a => a.status !== 'resolved').length > 0 && (
               <span style={{
@@ -255,7 +281,7 @@ export default function Dashboard({ user, onLogout }) {
             </div>
           </div>
 
-          <NdolaMap
+          <NdolaGoogleMap
             hotspots={hotspots}
             accidents={accidents}
             onRoadClick={handleRoadClick}
@@ -322,9 +348,14 @@ export default function Dashboard({ user, onLogout }) {
                 )}
                 <div className="accident-meta">
                   <span>Reported by {report.driverUsername}</span>
-                  <span>{report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</span>
+                  <span>
+                    {(report.latitude ?? report.coordinates?.latitude)?.toFixed(5)},{' '}
+                    {(report.longitude ?? report.coordinates?.longitude)?.toFixed(5)}
+                  </span>
                 </div>
-                {report.photoUrl && <img className="report-photo" src={report.photoUrl} alt="Accident evidence" />}
+                {report.photoUrl && (
+                  <img className="report-photo" src={report.photoUrl} alt="Accident evidence" />
+                )}
               </div>
             ))
           )}

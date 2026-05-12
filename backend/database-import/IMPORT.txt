@@ -1,0 +1,13 @@
+Import into MongoDB database "road-accident-system" (create empty DB in Compass or use mongoimport).
+
+Commands (MongoDB Database Tools):
+
+mongoimport --uri mongodb://localhost:27017/road-accident-system --collection users --drop --file users.json --jsonArray
+
+mongoimport --uri mongodb://localhost:27017/road-accident-system --collection hotspots --drop --file hotspots.json --jsonArray
+
+Password hashes match plaintext:
+  driver1 / password123
+  rtsa_admin / rtsa2024!
+
+Alternatively run: npm run seed

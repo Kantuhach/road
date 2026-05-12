@@ -5,7 +5,6 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
-// Configure multer for photo uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = 'uploads/accidents/';
@@ -15,16 +14,14 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   }
 });
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -34,38 +31,34 @@ const upload = multer({
   }
 });
 
-// GET all active accidents
+function broadcast(app, message) {
+  if (app.locals.websocketServer) {
+    app.locals.websocketServer.broadcast(message);
+  }
+}
+
 router.get('/active', async (req, res) => {
   try {
     const accidents = await Accident.findActive();
-    res.json(accidents);
+    res.json(accidents.map((a) => a.toJSON()));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET accidents near a location
 router.get('/nearby', async (req, res) => {
   try {
     const { lat, lng, radius = 5 } = req.query;
-    
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Latitude and longitude required' });
     }
-
-    const accidents = await Accident.findNearby(
-      parseFloat(lat), 
-      parseFloat(lng), 
-      parseFloat(radius)
-    );
-    
-    res.json(accidents);
+    const accidents = await Accident.findNearby(parseFloat(lat), parseFloat(lng), parseFloat(radius));
+    res.json(accidents.map((a) => a.toJSON()));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET accident statistics
 router.get('/stats', async (req, res) => {
   try {
     const stats = await Accident.getAccidentStats();
@@ -75,98 +68,107 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// POST new accident with photo
 router.post('/', upload.single('photo'), async (req, res) => {
   try {
-    const accidentData = {
-      ...req.body,
-      photo: req.file ? req.file.path : null,
-      photoUrl: req.file ? `/uploads/accidents/${req.file.filename}` : null,
-      coordinates: {
-        latitude: parseFloat(req.body.latitude),
-        longitude: parseFloat(req.body.longitude)
-      },
-      severity: req.body.severity || 'Medium',
-      status: 'active',
-      verified: false,
-      reportedBy: 'driver'
-    };
-
-    const accident = new Accident(accidentData);
-    await accident.save();
-
-    // Notify WebSocket clients
-    if (req.app.locals.websocketServer) {
-      req.app.locals.websocketServer.broadcast({
-        type: 'ACCIDENT_REPORTED',
-        accident: accident
-      });
+    const lat = parseFloat(req.body.latitude);
+    const lng = parseFloat(req.body.longitude);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({ error: 'Valid latitude and longitude required' });
     }
+
+    const driverUsername = req.body.driverUsername || req.body.reporterName || 'driver';
+
+    const accident = await Accident.create({
+      roadName: req.body.roadName || 'Unknown road',
+      town: req.body.town || 'Ndola',
+      description: req.body.description || '',
+      severity: req.body.severity || 'Medium',
+      status: 'pending',
+      verified: false,
+      verificationStatus: 'pending',
+      coordinates: { latitude: lat, longitude: lng },
+      reportedBy: 'driver',
+      driverUsername,
+      photo: req.file ? req.file.filename : '',
+      photoUrl: req.file ? `/uploads/accidents/${req.file.filename}` : ''
+    });
+
+    broadcast(req.app, {
+      type: 'ACCIDENT_REPORTED',
+      accident: accident.toJSON()
+    });
 
     res.status(201).json({
       success: true,
-      accident,
+      accident: accident.toJSON(),
       message: 'Accident reported successfully'
     });
-
   } catch (error) {
     console.error('Error creating accident:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to report accident',
-      message: error.message 
+      message: error.message
     });
   }
 });
 
-// PUT update accident (for verification by RTSA)
 router.put('/:id', async (req, res) => {
   try {
     const accident = await Accident.findById(req.params.id);
-    
     if (!accident) {
       return res.status(404).json({ error: 'Accident not found' });
     }
 
-    // Update fields
-    const updates = {
-      ...req.body,
-      verifiedAt: req.body.verified ? new Date() : accident.verifiedAt,
-      verifiedBy: req.body.verified ? req.body.verifiedBy : accident.verifiedBy
-    };
+    const updates = { ...req.body };
+    delete updates._id;
 
-    const updatedAccident = await Accident.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      { new: true }
-    );
-
-    // Notify WebSocket clients
-    if (req.app.locals.websocketServer) {
-      req.app.locals.websocketServer.broadcast({
-        type: 'ACCIDENT_UPDATE',
-        accident: updatedAccident
-      });
+    if (updates.latitude != null && updates.longitude != null) {
+      updates.coordinates = {
+        latitude: parseFloat(updates.latitude),
+        longitude: parseFloat(updates.longitude)
+      };
+      delete updates.latitude;
+      delete updates.longitude;
     }
+
+    if (updates.verified === true) {
+      updates.verifiedAt = new Date();
+      updates.verificationStatus = 'approved';
+      if (updates.status !== 'resolved' && updates.status !== 'cleared') {
+        updates.status = 'active';
+      }
+    }
+
+    if (updates.verified === false && updates.verificationStatus === 'rejected') {
+      updates.status = updates.status || 'cleared';
+    }
+
+    Object.assign(accident, updates);
+    await accident.save();
+
+    broadcast(req.app, {
+      type: 'ACCIDENT_UPDATE',
+      accident: accident.toJSON()
+    });
 
     res.json({
       success: true,
-      accident: updatedAccident,
+      accident: accident.toJSON(),
       message: 'Accident updated successfully'
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// DELETE accident (clear accident)
 router.delete('/:id', async (req, res) => {
   try {
     const accident = await Accident.findByIdAndUpdate(
       req.params.id,
-      { 
+      {
         status: 'cleared',
-        clearedAt: new Date()
+        clearedAt: new Date(),
+        clearanceTime: new Date()
       },
       { new: true }
     );
@@ -175,97 +177,75 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Accident not found' });
     }
 
-    // Notify WebSocket clients
-    if (req.app.locals.websocketServer) {
-      req.app.locals.websocketServer.broadcast({
-        type: 'ACCIDENT_CLEARED',
-        accidentId: req.params.id
-      });
-    }
+    broadcast(req.app, {
+      type: 'ACCIDENT_CLEARED',
+      accidentId: accident._id.toString()
+    });
 
     res.json({
       success: true,
       message: 'Accident cleared successfully'
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET safe routes for an accident
 router.get('/:id/routes', async (req, res) => {
   try {
     const accident = await Accident.findById(req.params.id);
-    
     if (!accident) {
       return res.status(404).json({ error: 'Accident not found' });
     }
-
     res.json({
       accidentId: req.params.id,
       safeRoutes: accident.safeRoutes || [],
       message: 'Safe routes retrieved successfully'
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// POST safe route for an accident
 router.post('/:id/routes', async (req, res) => {
   try {
     const accident = await Accident.findById(req.params.id);
-    
     if (!accident) {
       return res.status(404).json({ error: 'Accident not found' });
     }
-
-    const newRoute = {
+    accident.safeRoutes.push({
       ...req.body,
       createdAt: new Date()
-    };
-
-    accident.safeRoutes.push(newRoute);
+    });
     await accident.save();
 
-    // Notify WebSocket clients about new safe route
-    if (req.app.locals.websocketServer) {
-      req.app.locals.websocketServer.broadcast({
-        type: 'SAFE_ROUTE_ADDED',
-        accidentId: req.params.id,
-        route: newRoute
-      });
-    }
+    broadcast(req.app, {
+      type: 'SAFE_ROUTE_ADDED',
+      accidentId: req.params.id,
+      route: accident.safeRoutes[accident.safeRoutes.length - 1]
+    });
 
     res.status(201).json({
       success: true,
-      route: newRoute,
+      route: accident.safeRoutes[accident.safeRoutes.length - 1],
       message: 'Safe route added successfully'
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET all accidents (with pagination)
 router.get('/', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
     const skip = (page - 1) * limit;
 
-    const accidents = await Accident.find()
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(limit);
-
+    const accidents = await Accident.find().sort({ createdAt: -1 }).skip(skip).limit(limit);
     const total = await Accident.countDocuments();
 
     res.json({
-      accidents,
+      accidents: accidents.map((a) => a.toJSON()),
       pagination: {
         page,
         limit,
@@ -273,7 +253,6 @@ router.get('/', async (req, res) => {
         pages: Math.ceil(total / limit)
       }
     });
-
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

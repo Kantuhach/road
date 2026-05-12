@@ -8,7 +8,7 @@ class WebSocketService {
     this.isConnecting = false;
   }
 
-  connect(url = 'ws://localhost:8081') {
+  connect(url = 'ws://localhost:8081/ws') {
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
       return;
     }

@@ -1,134 +1,159 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 
-export default function AccidentVerificationPanel() {
-  const [pendingAccidents, setPendingAccidents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedAccident, setSelectedAccident] = useState(null);
+export default function AccidentVerificationPanel({ accidents, onRefresh }) {
+  const [selectedId, setSelectedId] = useState(null);
   const [verificationReason, setVerificationReason] = useState('');
   const [message, setMessage] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
-  useEffect(() => {
-    fetchPendingAccidents();
-  }, []);
+  const pending = (accidents || []).filter(
+    (a) => !a.verified && !['cleared', 'resolved'].includes(a.status)
+  );
 
-  const fetchPendingAccidents = async () => {
-    setLoading(true);
-    try {
-      const response = await axios.get('http://localhost:8080/api/verification/pending-accidents');
-      setPendingAccidents(response.data);
-    } catch (error) {
-      console.error('Error fetching pending accidents:', error);
-      setMessage('Failed to load pending accidents');
-    } finally {
-      setLoading(false);
-    }
+  const notify = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), 6000);
   };
 
-  const validateImage = async (accidentId) => {
+  const approve = async (id) => {
+    setBusyId(id);
     try {
-      const response = await axios.post(`http://localhost:8080/api/verification/validate-image/${accidentId}`);
-      setMessage(`Image validation: ${response.data.reason}`);
-      if (response.data.valid) {
-        setMessage(`Image valid! Credibility score: ${response.data.credibilityScore}/100`);
-      }
-      fetchPendingAccidents();
-    } catch (error) {
-      console.error('Error validating image:', error);
-      setMessage('Failed to validate image');
-    }
-  };
-
-  const verifyAccident = async (accidentId, approved) => {
-    try {
-      const response = await axios.post(
-        `http://localhost:8080/api/verification/verify-accident/${accidentId}`,
-        null,
-        {
-          params: {
-            approved,
-            reason: verificationReason
-          }
-        }
-      );
-      setMessage(response.data.message);
-      setSelectedAccident(null);
+      await axios.put(`/api/accidents/${id}`, {
+        verified: true,
+        verifiedBy: 'admin',
+        verificationStatus: 'approved',
+        status: 'active'
+      });
+      notify('Report verified and published on the map.');
+      setSelectedId(null);
       setVerificationReason('');
-      fetchPendingAccidents();
-    } catch (error) {
-      console.error('Error verifying accident:', error);
-      setMessage('Failed to verify accident');
+      onRefresh?.();
+    } catch (e) {
+      notify('Unable to verify report.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reject = async (id) => {
+    setBusyId(id);
+    try {
+      await axios.put(`/api/accidents/${id}`, {
+        verified: false,
+        verificationStatus: 'rejected',
+        status: 'cleared',
+        verificationReason: verificationReason || 'Rejected by admin'
+      });
+      notify('Report rejected and cleared.');
+      setSelectedId(null);
+      setVerificationReason('');
+      onRefresh?.();
+    } catch (e) {
+      notify('Unable to reject report.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const activeIncidents = (accidents || []).filter((a) => a.verified && a.status === 'active');
+
+  const markResolved = async (id) => {
+    setBusyId(id);
+    try {
+      await axios.put(`/api/accidents/${id}`, {
+        status: 'resolved',
+        verificationReason: verificationReason || 'Scene cleared — road usable.'
+      });
+      notify('Accident marked resolved. Drivers will see the route as open.');
+      setSelectedId(null);
+      setVerificationReason('');
+      onRefresh?.();
+    } catch (e) {
+      notify('Unable to update status.');
+    } finally {
+      setBusyId(null);
     }
   };
 
   return (
     <div className="admin-verification-panel">
-      <h3>Accident Verification & Image Validation</h3>
-      
-      {message && (
-        <div className="alert-message">
-          {message}
-        </div>
-      )}
+      <h3>Driver reports</h3>
+      <p className="verification-help">
+        Approve to show an incident on live maps. Mark resolved when the road is clear again.
+      </p>
 
-      {loading ? (
-        <p>Loading pending accidents...</p>
-      ) : pendingAccidents.length === 0 ? (
-        <p>No pending accidents for verification</p>
+      {message && <div className="alert-message">{message}</div>}
+
+      {pending.length === 0 ? (
+        <p>No pending driver reports.</p>
       ) : (
         <div className="pending-accidents-list">
-          {pendingAccidents.map((accident) => (
+          {pending.map((accident) => (
             <div key={accident.id} className="accident-verification-card">
               <div className="accident-info">
-                <h4>{accident.town} - {accident.roadName}</h4>
-                <p><strong>Reporter:</strong> {accident.reporterName}</p>
-                <p><strong>Description:</strong> {accident.description}</p>
-                <p><strong>Status:</strong> {accident.verificationStatus}</p>
-                <p><strong>Image Validated:</strong> {accident.imageValidated ? '✓ Yes' : '✗ No'}</p>
-                <p><strong>Location:</strong> ({accident.latitude.toFixed(4)}, {accident.longitude.toFixed(4)})</p>
+                <h4>
+                  {accident.town} — {accident.roadName}
+                </h4>
+                <p>
+                  <strong>Reporter:</strong> {accident.driverUsername || accident.reportedBy || 'Unknown'}
+                </p>
+                <p>
+                  <strong>Description:</strong> {accident.description || '—'}
+                </p>
+                <p>
+                  <strong>Severity:</strong> {accident.severity}
+                </p>
+                <p>
+                  <strong>Location:</strong> (
+                  {Number(accident.latitude ?? accident.coordinates?.latitude).toFixed(4)},{' '}
+                  {Number(accident.longitude ?? accident.coordinates?.longitude).toFixed(4)})
+                </p>
               </div>
 
               <div className="accident-actions">
-                <button 
-                  className="btn-validate"
-                  onClick={() => validateImage(accident.id)}
-                  disabled={accident.imageValidated}
-                >
-                  {accident.imageValidated ? 'Image Valid ✓' : 'Validate Image'}
-                </button>
-
-                {!selectedAccident || selectedAccident.id !== accident.id ? (
-                  <button 
-                    className="btn-review"
-                    onClick={() => setSelectedAccident(accident)}
-                  >
-                    Review & Verify
+                {!selectedId || selectedId !== accident.id ? (
+                  <button type="button" className="btn-review" onClick={() => setSelectedId(accident.id)}>
+                    Review
                   </button>
                 ) : (
                   <div className="verification-form">
                     <textarea
-                      placeholder="Enter verification reason..."
+                      placeholder="Optional note for drivers…"
                       value={verificationReason}
                       onChange={(e) => setVerificationReason(e.target.value)}
                       className="reason-textarea"
                     />
                     <div className="button-group">
-                      <button 
+                      <button
+                        type="button"
                         className="btn-approve"
-                        onClick={() => verifyAccident(accident.id, true)}
+                        disabled={busyId === accident.id}
+                        onClick={() => approve(accident.id)}
                       >
-                        ✓ Approve
+                        Approve for map
                       </button>
-                      <button 
+                      <button
+                        type="button"
+                        className="btn-secondary-admin"
+                        disabled={busyId === accident.id}
+                        onClick={() => markResolved(accident.id)}
+                      >
+                        Mark resolved
+                      </button>
+                      <button
+                        type="button"
                         className="btn-reject"
-                        onClick={() => verifyAccident(accident.id, false)}
+                        disabled={busyId === accident.id}
+                        onClick={() => reject(accident.id)}
                       >
-                        ✗ Reject
+                        Reject / clear
                       </button>
-                      <button 
+                      <button
+                        type="button"
                         className="btn-cancel"
                         onClick={() => {
-                          setSelectedAccident(null);
+                          setSelectedId(null);
                           setVerificationReason('');
                         }}
                       >
@@ -138,6 +163,33 @@ export default function AccidentVerificationPanel() {
                   </div>
                 )}
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h3 className="verification-section-title">Active on map</h3>
+      <p className="verification-help">Close incidents once responders confirm the corridor is safe.</p>
+      {activeIncidents.length === 0 ? (
+        <p>No verified active incidents.</p>
+      ) : (
+        <div className="pending-accidents-list">
+          {activeIncidents.map((accident) => (
+            <div key={accident.id} className="accident-verification-card">
+              <div className="accident-info">
+                <h4>
+                  {accident.town} — {accident.roadName}
+                </h4>
+                <p>Severity: {accident.severity}</p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary-admin"
+                disabled={busyId === accident.id}
+                onClick={() => markResolved(accident.id)}
+              >
+                Mark road clear
+              </button>
             </div>
           ))}
         </div>

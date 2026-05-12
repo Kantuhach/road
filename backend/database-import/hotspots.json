@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Ndola Central Roundabout",
+    "latitude": -12.8056,
+    "longitude": 28.66,
+    "severity": "High",
+    "description": "High traffic area with frequent congestion",
+    "timePattern": "Weekday peaks",
+    "incidentCount": 12,
+    "status": "active",
+    "active": true
+  },
+  {
+    "name": "Kansenshi Highway Junction",
+    "latitude": -12.835,
+    "longitude": 28.65,
+    "severity": "Medium",
+    "description": "Intersection accident hotspot",
+    "timePattern": "Late afternoon",
+    "incidentCount": 7,
+    "status": "active",
+    "active": true
+  },
+  {
+    "name": "Chifubu Market Area",
+    "latitude": -12.82,
+    "longitude": 28.63,
+    "severity": "Low",
+    "description": "Urban area with moderate risk",
+    "timePattern": "Market days",
+    "incidentCount": 4,
+    "status": "active",
+    "active": true
+  }
+]

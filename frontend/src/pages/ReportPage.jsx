@@ -1,34 +1,37 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 export default function ReportPage({ user }) {
   const navigate = useNavigate();
+  const fileRef = useRef(null);
   const [reportForm, setReportForm] = useState({
     reporterName: user.username,
     driverUsername: user.username,
     town: 'Town Centre',
     roadName: 'Main Street',
-    latitude: -12.8056,
-    longitude: 28.6600,
-    description: '',
-    photoUrl: ''
+    latitude: -12.9697,
+    longitude: 28.6367,
+    description: ''
   });
   const [photoPreview, setPhotoPreview] = useState('');
   const [statusMessage, setStatusMessage] = useState('Fill in the accident details below and submit.');
   const [submitError, setSubmitError] = useState('');
   const [routeSuggestions, setRouteSuggestions] = useState([]);
 
-  const townRoads = useMemo(() => ({
-    'Town Centre': ['Main Street', 'George Road', 'Market Avenue'],
-    Kansenshi: ['Sibonelo Road', 'Chifubu Road', 'United Road'],
-    Masala: ['Masala Road', 'Chipulukusu Road', 'Nchanga Bypass'],
-    Itawa: ['Itawa Road', 'M4 Highway', 'Ndeke Connector'],
-    Ndeke: ['Ndeke Road', 'Chipulukusu Drive', 'Tui Street'],
-    Chifubu: ['Chifubu Road', 'Kamwala Road', 'Omsa Road'],
-    Twapia: ['Twapia Road', 'Luapula Road', 'Boma Road'],
-    Chipulukusu: ['Chipulukusu Road', 'Mapalo Road', 'Nkana Road']
-  }), []);
+  const townRoads = useMemo(
+    () => ({
+      'Town Centre': ['Main Street', 'George Road', 'Market Avenue'],
+      Kansenshi: ['Sibonelo Road', 'Chifubu Road', 'United Road'],
+      Masala: ['Masala Road', 'Chipulukusu Road', 'Nchanga Bypass'],
+      Itawa: ['Itawa Road', 'M4 Highway', 'Ndeke Connector'],
+      Ndeke: ['Ndeke Road', 'Chipulukusu Drive', 'Tui Street'],
+      Chifubu: ['Chifubu Road', 'Kamwala Road', 'Omsa Road'],
+      Twapia: ['Twapia Road', 'Luapula Road', 'Boma Road'],
+      Chipulukusu: ['Chipulukusu Road', 'Mapalo Road', 'Nkana Road']
+    }),
+    []
+  );
 
   const selectedRoads = townRoads[reportForm.town] || [];
 
@@ -37,13 +40,30 @@ export default function ReportPage({ user }) {
       return;
     }
 
-    axios.get('/api/route-suggestions', { params: { town: reportForm.town } })
+    axios
+      .get('/api/route-suggestions', { params: { town: reportForm.town } })
       .then((response) => setRouteSuggestions(response.data))
       .catch(() => setRouteSuggestions([]));
   }, [reportForm.town]);
 
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setReportForm((current) => ({
+          ...current,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude
+        }));
+        setStatusMessage('GPS location captured — adjust if needed before sending.');
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 60_000 }
+    );
+  }, []);
+
   const handlePhotoChange = (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) {
       return;
     }
@@ -51,10 +71,6 @@ export default function ReportPage({ user }) {
     const reader = new FileReader();
     reader.onload = () => {
       setPhotoPreview(reader.result);
-      setReportForm((current) => ({
-        ...current,
-        photoUrl: reader.result.toString()
-      }));
     };
     reader.readAsDataURL(file);
   };
@@ -62,21 +78,39 @@ export default function ReportPage({ user }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitError('');
+    const file = fileRef.current?.files?.[0];
+    if (!file) {
+      setSubmitError('Attach a photo from the scene (required for verification).');
+      return;
+    }
+
     try {
-      const response = await axios.post('/api/accidents', reportForm);
+      const fd = new FormData();
+      fd.append('roadName', reportForm.roadName);
+      fd.append('town', reportForm.town);
+      fd.append('latitude', String(reportForm.latitude));
+      fd.append('longitude', String(reportForm.longitude));
+      fd.append('description', reportForm.description);
+      fd.append('driverUsername', user.username);
+      fd.append('photo', file);
+
+      const response = await axios.post('/api/accidents', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       if (response.status === 200 || response.status === 201) {
-        setStatusMessage('Accident report submitted successfully.');
+        setStatusMessage('Accident report submitted successfully. An administrator will review it.');
         setReportForm((current) => ({
           ...current,
-          description: '',
-          photoUrl: ''
+          description: ''
         }));
         setPhotoPreview('');
+        if (fileRef.current) fileRef.current.value = '';
       } else {
         setSubmitError('Unable to submit the report, please try again.');
       }
-    } catch (error) {
-      setSubmitError('Unable to submit the report, please try again.');
+    } catch {
+      setSubmitError('Unable to submit the report. Check your connection and try again.');
     }
   };
 
@@ -87,13 +121,15 @@ export default function ReportPage({ user }) {
           <h1>Accident Report</h1>
           <p>{statusMessage}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>Back to dashboard</button>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
+          Back to dashboard
+        </button>
       </header>
 
       <main className="dashboard-grid">
         <section className="report-card">
           <h2>Submit a report</h2>
-          <p>Share the location, road, and photo evidence so the community stays informed.</p>
+          <p>Share the location, road, and photo evidence so responders can verify and publish alerts.</p>
           <form className="report-form" onSubmit={handleSubmit}>
             <label>
               Town
@@ -102,7 +138,9 @@ export default function ReportPage({ user }) {
                 onChange={(e) => setReportForm((current) => ({ ...current, town: e.target.value }))}
               >
                 {Object.keys(townRoads).map((town) => (
-                  <option key={town} value={town}>{town}</option>
+                  <option key={town} value={town}>
+                    {town}
+                  </option>
                 ))}
               </select>
             </label>
@@ -114,9 +152,35 @@ export default function ReportPage({ user }) {
                 onChange={(e) => setReportForm((current) => ({ ...current, roadName: e.target.value }))}
               >
                 {selectedRoads.map((road) => (
-                  <option key={road} value={road}>{road}</option>
+                  <option key={road} value={road}>
+                    {road}
+                  </option>
                 ))}
               </select>
+            </label>
+
+            <label>
+              Latitude
+              <input
+                type="number"
+                step="any"
+                value={reportForm.latitude}
+                onChange={(e) =>
+                  setReportForm((current) => ({ ...current, latitude: parseFloat(e.target.value) }))
+                }
+              />
+            </label>
+
+            <label>
+              Longitude
+              <input
+                type="number"
+                step="any"
+                value={reportForm.longitude}
+                onChange={(e) =>
+                  setReportForm((current) => ({ ...current, longitude: parseFloat(e.target.value) }))
+                }
+              />
             </label>
 
             <label>
@@ -131,12 +195,14 @@ export default function ReportPage({ user }) {
 
             <label>
               Photo evidence
-              <input type="file" accept="image/*" onChange={handlePhotoChange} />
+              <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} />
             </label>
             {photoPreview && <img className="photo-preview" src={photoPreview} alt="Accident preview" />}
 
             {submitError && <p className="form-status error">{submitError}</p>}
-            <button type="submit" className="btn btn-primary">Submit report</button>
+            <button type="submit" className="btn btn-primary">
+              Submit report
+            </button>
           </form>
         </section>
 
@@ -148,7 +214,9 @@ export default function ReportPage({ user }) {
                 <p>Choose a town to load nearby alternate routes.</p>
               ) : (
                 routeSuggestions.map((route, index) => (
-                  <div key={index} className="suggestion-item">{route}</div>
+                  <div key={index} className="suggestion-item">
+                    {route}
+                  </div>
                 ))
               )}
             </div>

@@ -1,24 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import HotspotAdmin from '../components/HotspotAdmin';
 import AccidentVerificationPanel from '../components/AccidentVerificationPanel';
+import {
+  IconShield,
+  IconUser,
+  IconLock,
+  IconLogout,
+  IconChart,
+  IconAlertTriangle,
+  IconMapPin,
+  IconSearch,
+  IconClipboard,
+  IconCheck,
+  IconHourglass
+} from '../components/Icons';
 
-const rtsaCredentials = {
-  username: 'rtsa_admin',
-  password: 'rtsa2024!'
-};
-
-const rtsaInfo = {
-  agency: 'Road Transport and Safety Agency',
-  acronym: 'RTSA',
-  department: 'Traffic Safety Division',
-  jurisdiction: 'Zambia'
-};
-
-export default function AdminPage() {
+export default function AdminPage({ appUser, setAppUser }) {
   const navigate = useNavigate();
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(() => appUser?.role === 'admin');
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [hotspots, setHotspots] = useState([]);
@@ -26,37 +27,31 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [realTimeStats, setRealTimeStats] = useState({
-    activeAlerts: 12,
-    verified: 28,
-    pending: 5,
-    totalHotspots: 0
-  });
+
+  useEffect(() => {
+    if (appUser?.role === 'admin') {
+      setAuthenticated(true);
+    }
+  }, [appUser]);
 
   useEffect(() => {
     if (authenticated) {
       loadHotspots();
       loadAccidents();
-      startRealTimeUpdates();
     }
   }, [authenticated]);
 
-  // Real-time updates simulation
-  useEffect(() => {
-    if (authenticated) {
-      const interval = setInterval(() => {
-        setRealTimeStats(prev => ({
-          ...prev,
-          activeAlerts: Math.max(0, prev.activeAlerts + Math.floor(Math.random() * 3) - 1),
-          verified: prev.verified + (Math.random() > 0.7 ? 1 : 0),
-          pending: Math.max(0, prev.pending + Math.floor(Math.random() * 3) - 1),
-          totalHotspots: hotspots.length
-        }));
-      }, 5000);
-      
-      return () => clearInterval(interval);
-    }
-  }, [authenticated, hotspots.length]);
+  const stats = useMemo(
+    () => ({
+      activeAlerts: accidents.filter((a) => ['active', 'pending'].includes(a.status)).length,
+      verified: accidents.filter((a) => a.verified).length,
+      pendingVerify: accidents.filter(
+        (a) => !a.verified && !['cleared', 'resolved'].includes(a.status)
+      ).length,
+      totalHotspots: hotspots.length
+    }),
+    [accidents, hotspots]
+  );
 
   const loadHotspots = async () => {
     try {
@@ -71,16 +66,14 @@ export default function AdminPage() {
   const loadAccidents = async () => {
     try {
       const response = await axios.get('/api/accidents');
-      setAccidents(response.data || []);
+      const list = response.data.accidents ?? response.data;
+      setAccidents(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
       setAccidents([]);
     }
   };
 
-  const startRealTimeUpdates = () => {
-    console.log('Starting real-time updates for RTSA dashboard');
-  };
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -93,21 +86,38 @@ export default function AdminPage() {
     return matchesSearch && matchesFilter;
   });
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
-    if (form.username === rtsaCredentials.username && form.password === rtsaCredentials.password) {
+    setError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: form.username.trim(), password: form.password })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Invalid credentials.');
+      }
+      setAppUser({
+        token: data.token,
+        id: data.user.id,
+        username: data.user.username,
+        role: data.user.role,
+        email: data.user.email || ''
+      });
       setAuthenticated(true);
-      setError('');
-    } else {
-      setError('Invalid RTSA credentials. Access denied.');
+      setForm({ username: '', password: '' });
+    } catch (e) {
+      setError(e.message || 'Access denied.');
     }
   };
 
   const handleLogout = () => {
     setAuthenticated(false);
+    setAppUser(null);
     setForm({ username: '', password: '' });
-    setHotspots([]);
-    navigate('/auth');
+    navigate('/');
   };
 
   return (
@@ -670,7 +680,9 @@ export default function AdminPage() {
           <>
             <div className="auth-hero">
               <div className="rtsa-badge">
-                <span className="rtsa-icon">🛡️</span>
+                <span className="rtsa-icon svg-icon-wrap">
+                  <IconShield />
+                </span>
                 <span className="rtsa-text">RTSA</span>
               </div>
               <h1>RTSA Admin Portal</h1>
@@ -679,7 +691,9 @@ export default function AdminPage() {
             </div>
             <form className="auth-form" onSubmit={handleLogin}>
               <label>
-                <span className="label-icon">👤</span>
+                <span className="label-icon svg-icon-wrap">
+                  <IconUser />
+                </span>
                 RTSA Username
                 <input
                   value={form.username}
@@ -689,7 +703,9 @@ export default function AdminPage() {
                 />
               </label>
               <label>
-                <span className="label-icon">🔐</span>
+                <span className="label-icon svg-icon-wrap">
+                  <IconLock />
+                </span>
                 RTSA Password
                 <input
                   type="password"
@@ -701,7 +717,9 @@ export default function AdminPage() {
               </label>
               {error && <p className="form-status error">{error}</p>}
               <button type="submit" className="btn btn-primary rtsa-btn">
-                <span className="btn-icon">🛡️</span>
+                <span className="btn-icon svg-icon-wrap">
+                  <IconShield />
+                </span>
                 Access RTSA Portal
               </button>
             </form>
@@ -713,7 +731,9 @@ export default function AdminPage() {
               <div className="header-content">
                 <div className="rtsa-header-modern">
                   <div className="rtsa-logo-modern">
-                    <span className="rtsa-icon-large">🛡️</span>
+                    <span className="rtsa-icon-large svg-icon-wrap">
+                      <IconShield />
+                    </span>
                     <div className="logo-text">
                       <h1>RTSA Control Center</h1>
                       <p>Road Transport and Safety Agency - Zambia</p>
@@ -733,8 +753,10 @@ export default function AdminPage() {
                     <span className="stat-label">Reports</span>
                   </div>
                 </div>
-                <button className="btn btn-secondary rtsa-logout-modern" onClick={handleLogout}>
-                  <span className="btn-icon">🚪</span>
+                <button type="button" className="btn btn-secondary rtsa-logout-modern" onClick={handleLogout}>
+                  <span className="btn-icon svg-icon-wrap">
+                    <IconLogout />
+                  </span>
                   Sign out
                 </button>
               </div>
@@ -743,31 +765,43 @@ export default function AdminPage() {
             {/* Navigation Tabs */}
             <div className="admin-nav-tabs">
               <button 
+                type="button"
                 className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
                 onClick={() => handleTabChange('dashboard')}
               >
-                <span className="tab-icon">📊</span>
+                <span className="tab-icon svg-icon-wrap">
+                  <IconChart />
+                </span>
                 <span>Dashboard</span>
               </button>
               <button 
+                type="button"
                 className={`nav-tab ${activeTab === 'accidents' ? 'active' : ''}`}
                 onClick={() => handleTabChange('accidents')}
               >
-                <span className="tab-icon">⚠️</span>
+                <span className="tab-icon svg-icon-wrap">
+                  <IconAlertTriangle />
+                </span>
                 <span>Accident Reports</span>
               </button>
               <button 
+                type="button"
                 className={`nav-tab ${activeTab === 'hotspots' ? 'active' : ''}`}
                 onClick={() => handleTabChange('hotspots')}
               >
-                <span className="tab-icon">📍</span>
+                <span className="tab-icon svg-icon-wrap">
+                  <IconMapPin />
+                </span>
                 <span>Hotspot Management</span>
               </button>
               <button 
+                type="button"
                 className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
                 onClick={() => handleTabChange('analytics')}
               >
-                <span className="tab-icon">📈</span>
+                <span className="tab-icon svg-icon-wrap">
+                  <IconChart />
+                </span>
                 <span>Analytics</span>
               </button>
             </div>
@@ -775,7 +809,9 @@ export default function AdminPage() {
             {/* Search and Filter Bar */}
             <div className="search-filter-bar">
               <div className="search-box">
-                <span className="search-icon">🔍</span>
+                <span className="search-icon svg-icon-wrap">
+                  <IconSearch />
+                </span>
                 <input
                   type="text"
                   placeholder="Search accidents, hotspots..."
@@ -803,31 +839,39 @@ export default function AdminPage() {
               {/* Quick Stats Cards */}
               <div className="stats-grid">
                 <div className="stat-card primary">
-                  <div className="stat-icon">🚨</div>
+                  <div className="stat-icon svg-icon-wrap">
+                    <IconAlertTriangle />
+                  </div>
                   <div className="stat-info">
                     <h3>Active Alerts</h3>
-                    <span className="stat-value">{realTimeStats.activeAlerts}</span>
+                    <span className="stat-value">{stats.activeAlerts}</span>
                   </div>
                 </div>
                 <div className="stat-card success">
-                  <div className="stat-icon">✅</div>
+                  <div className="stat-icon svg-icon-wrap">
+                    <IconCheck />
+                  </div>
                   <div className="stat-info">
                     <h3>Verified</h3>
-                    <span className="stat-value">{realTimeStats.verified}</span>
+                    <span className="stat-value">{stats.verified}</span>
                   </div>
                 </div>
                 <div className="stat-card warning">
-                  <div className="stat-icon">⏳</div>
+                  <div className="stat-icon svg-icon-wrap">
+                    <IconHourglass />
+                  </div>
                   <div className="stat-info">
-                    <h3>Pending</h3>
-                    <span className="stat-value">{realTimeStats.pending}</span>
+                    <h3>Pending review</h3>
+                    <span className="stat-value">{stats.pendingVerify}</span>
                   </div>
                 </div>
                 <div className="stat-card danger">
-                  <div className="stat-icon">📍</div>
+                  <div className="stat-icon svg-icon-wrap">
+                    <IconMapPin />
+                  </div>
                   <div className="stat-info">
                     <h3>Hotspots</h3>
-                    <span className="stat-value">{realTimeStats.totalHotspots}</span>
+                    <span className="stat-value">{stats.totalHotspots}</span>
                   </div>
                 </div>
               </div>
@@ -836,26 +880,36 @@ export default function AdminPage() {
               <div className="admin-sections-modern">
                 <div className="section-card">
                   <div className="section-header">
-                    <h2>📋 Accident Verification Panel</h2>
+                    <h2>
+                      <span className="section-heading-icon svg-icon-wrap">
+                        <IconClipboard />
+                      </span>
+                      Accident verification
+                    </h2>
                     <span className="section-badge">{filteredAccidents.length} filtered</span>
                   </div>
                   <div className="section-content">
-                    <AccidentVerificationPanel />
+                    <AccidentVerificationPanel accidents={accidents} onRefresh={loadAccidents} />
                   </div>
                 </div>
                 
                 <div className="section-card">
                   <div className="section-header">
-                    <h2>🗺️ Hotspot Management</h2>
+                    <h2>
+                      <span className="section-heading-icon svg-icon-wrap">
+                        <IconMapPin />
+                      </span>
+                      Hotspot management
+                    </h2>
                     <span className="section-badge">{hotspots.length} total</span>
                   </div>
                   <div className="section-content">
                     <HotspotAdmin
                       hotspots={hotspots}
                       onHotspotSaved={(updated) => {
-                        const exists = hotspots.some((h) => h.id === updated.id);
+                        const exists = hotspots.some((h) => String(h.id) === String(updated.id));
                         setHotspots((current) =>
-                          exists ? current.map((h) => (h.id === updated.id ? updated : h)) : [...current, updated]
+                          exists ? current.map((h) => (String(h.id) === String(updated.id) ? updated : h)) : [...current, updated]
                         );
                       }}
                       onHotspotDeleted={(id) => setHotspots((current) => current.filter((h) => h.id !== id))}

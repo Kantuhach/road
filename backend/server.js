@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const mongoose = require('mongoose');
@@ -53,23 +54,18 @@ app.use((req, res) => {
 });
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/road-accident-system', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/road-accident-system')
 .then(() => {
   console.log('Connected to MongoDB');
-  
-  // Start HTTP server
+
+  const wsServer = new WebSocketServer();
+  wsServer.start();
+  wsServer.startCleanupInterval();
+  app.locals.websocketServer = wsServer;
+
   server.listen(PORT, () => {
     console.log(`HTTP Server running on port ${PORT}`);
-    
-    // Start WebSocket server
-    const wsServer = new WebSocketServer();
-    wsServer.start();
-    
-    // Start cleanup interval
-    wsServer.startCleanupInterval();
+    console.log(`WebSocket server on port ${wsServer.port}`);
   });
 })
 .catch(err => {

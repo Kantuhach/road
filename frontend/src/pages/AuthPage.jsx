@@ -1,5 +1,18 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import {
+  IconCar,
+  IconHome,
+  IconLock,
+  IconSparkles,
+  IconRocket,
+  IconMail,
+  IconRegister,
+  IconSignIn,
+  IconSettings,
+  IconUser,
+  IconAlertTriangle
+} from '../components/Icons';
 
 export default function AuthPage({ user, onAuth, authError }) {
   const navigate = useNavigate();
@@ -15,7 +28,14 @@ export default function AuthPage({ user, onAuth, authError }) {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await onAuth({ mode, username: form.username, password: form.password, email: form.email });
+      const role = await onAuth({
+        mode,
+        username: form.username,
+        password: form.password,
+        email: form.email
+      });
+      if (role === 'admin') navigate('/admin');
+      else if (role === 'driver') navigate('/dashboard');
     } finally {
       setIsLoading(false);
     }
@@ -37,11 +57,15 @@ export default function AuthPage({ user, onAuth, authError }) {
       <nav className="auth-nav">
         <div className="auth-nav-content">
           <Link to="/" className="auth-nav-brand">
-            <span className="brand-icon">🚗</span>
+            <span className="brand-icon svg-icon-wrap" aria-hidden>
+              <IconCar />
+            </span>
             <span className="brand-text">Ndola Road Safety</span>
           </Link>
           <Link to="/" className="btn btn-secondary btn-back">
-            <span className="btn-icon">🏠</span>
+            <span className="btn-icon svg-icon-wrap" aria-hidden>
+              <IconHome />
+            </span>
             Back Home
           </Link>
         </div>
@@ -53,8 +77,8 @@ export default function AuthPage({ user, onAuth, authError }) {
           {/* Auth Header */}
           <div className="auth-header">
             <div className="auth-icon-wrapper">
-              <span className="auth-icon">
-                {mode === 'login' ? '🔐' : '🚀'}
+              <span className="auth-icon svg-icon-wrap svg-icon-auth">
+                {mode === 'login' ? <IconLock /> : <IconRocket />}
               </span>
             </div>
             <h1 className="auth-title">
@@ -75,7 +99,9 @@ export default function AuthPage({ user, onAuth, authError }) {
               type="button" 
               onClick={() => setMode('login')}
             >
-              <span className="tab-icon">🔑</span>
+              <span className="tab-icon svg-icon-wrap" aria-hidden>
+                <IconSignIn />
+              </span>
               Sign In
             </button>
             <button 
@@ -83,7 +109,9 @@ export default function AuthPage({ user, onAuth, authError }) {
               type="button" 
               onClick={() => setMode('register')}
             >
-              <span className="tab-icon">📝</span>
+              <span className="tab-icon svg-icon-wrap" aria-hidden>
+                <IconRegister />
+              </span>
               Register
             </button>
           </div>
@@ -93,7 +121,9 @@ export default function AuthPage({ user, onAuth, authError }) {
             {mode === 'register' && (
               <div className="form-group">
                 <label className="form-label">
-                  <span className="label-icon">📧</span>
+                  <span className="label-icon svg-icon-wrap" aria-hidden>
+                    <IconMail />
+                  </span>
                   Email Address
                 </label>
                 <input
@@ -109,7 +139,9 @@ export default function AuthPage({ user, onAuth, authError }) {
 
             <div className="form-group">
               <label className="form-label">
-                <span className="label-icon">👤</span>
+                <span className="label-icon svg-icon-wrap" aria-hidden>
+                  <IconUser />
+                </span>
                 Username
               </label>
               <input
@@ -123,7 +155,9 @@ export default function AuthPage({ user, onAuth, authError }) {
 
             <div className="form-group">
               <label className="form-label">
-                <span className="label-icon">🔒</span>
+                <span className="label-icon svg-icon-wrap" aria-hidden>
+                  <IconLock />
+                </span>
                 Password
               </label>
               <input
@@ -138,7 +172,9 @@ export default function AuthPage({ user, onAuth, authError }) {
 
             {authError && (
               <div className="form-status error">
-                <span className="status-icon">⚠️</span>
+                <span className="status-icon svg-icon-wrap" aria-hidden>
+                  <IconAlertTriangle />
+                </span>
                 {authError}
               </div>
             )}
@@ -155,8 +191,8 @@ export default function AuthPage({ user, onAuth, authError }) {
                 </>
               ) : (
                 <>
-                  <span className="btn-icon">
-                    {mode === 'login' ? '🚀' : '✨'}
+                  <span className="btn-icon svg-icon-wrap" aria-hidden>
+                    {mode === 'login' ? <IconRocket /> : <IconSparkles />}
                   </span>
                   {mode === 'login' ? 'Sign In' : 'Create Account'}
                 </>
@@ -185,7 +221,9 @@ export default function AuthPage({ user, onAuth, authError }) {
               type="button" 
               onClick={() => navigate('/admin')}
             >
-              <span className="btn-icon">⚙️</span>
+              <span className="btn-icon svg-icon-wrap" aria-hidden>
+                <IconSettings />
+              </span>
               Admin Access
             </button>
           </div>

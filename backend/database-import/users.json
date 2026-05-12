@@ -1,0 +1,14 @@
+[
+  {
+    "username": "driver1",
+    "passwordHash": "$2b$10$V7gOOWiR2z0kn2dxwgjqselfHiw.tb5CuMgEVWfytFuL1nt/6g25W",
+    "email": "driver@example.com",
+    "role": "driver"
+  },
+  {
+    "username": "rtsa_admin",
+    "passwordHash": "$2b$10$v2sdLCzNL.lpJB6NZrvlXOiDEP2IamJF9vWBu1V25Tdo1ApMscQL2",
+    "email": "admin@example.com",
+    "role": "admin"
+  }
+]

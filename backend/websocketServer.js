@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Accident = require('./models/Accident');
 const http = require('http');
 const { Server } = require('ws');
@@ -78,8 +78,6 @@ class WebSocketServer {
     this.wss.on('error', (error) => {
       console.error('WebSocket server error:', error);
     });
-
-    console.log(`WebSocket server started on port ${this.port}`);
   }
 
   generateClientId() {
@@ -112,7 +110,6 @@ class WebSocketServer {
 
   async handleAccidentReport(clientId, accidentData) {
     try {
-      // Validate accident data
       const validatedData = this.validateAccidentData(accidentData);
       if (!validatedData) {
         this.sendToClient(clientId, {
@@ -122,21 +119,30 @@ class WebSocketServer {
         return;
       }
 
-      // Save accident to database
-      const accident = new Accident(validatedData);
-      await accident.save();
-
-      // Broadcast to all clients
-      this.broadcast({
-        type: 'ACCIDENT_REPORTED',
-        accident: validatedData
+      const accident = await Accident.create({
+        roadName: validatedData.roadName,
+        town: validatedData.town || 'Ndola',
+        description: validatedData.description || '',
+        severity: validatedData.severity || 'Medium',
+        status: 'pending',
+        verified: false,
+        verificationStatus: 'pending',
+        coordinates: validatedData.coordinates,
+        photo: validatedData.photo ? String(validatedData.photo).slice(0, 240) : '',
+        reportedBy: validatedData.reportedBy || 'driver',
+        driverUsername: validatedData.driverUsername || 'driver'
       });
 
-      console.log(`Accident reported by client ${clientId}:`, validatedData);
+      const json = accident.toJSON();
 
-      // Schedule automatic removal after 1 hour
-      this.scheduleAccidentRemoval(validatedData.id, validatedData.clearanceTime);
+      this.broadcast({
+        type: 'ACCIDENT_REPORTED',
+        accident: json
+      });
 
+      console.log(`Accident reported by client ${clientId}:`, json.id);
+
+      this.scheduleAccidentRemoval(accident._id.toString(), accident.clearanceTime);
     } catch (error) {
       console.error('Error handling accident report:', error);
       this.sendToClient(clientId, {
@@ -158,24 +164,31 @@ class WebSocketServer {
   }
 
   validateAccidentData(data) {
-    const required = ['roadName', 'town', 'coordinates', 'severity', 'photo'];
-    
+    const required = ['roadName', 'coordinates', 'severity'];
     for (const field of required) {
       if (!data[field]) {
         console.error(`Missing required field: ${field}`);
         return null;
       }
     }
+    const coords = data.coordinates;
+    if (
+      coords.latitude == null ||
+      coords.longitude == null ||
+      Number.isNaN(Number(coords.latitude)) ||
+      Number.isNaN(Number(coords.longitude))
+    ) {
+      return null;
+    }
 
-    // Add timestamps and metadata
     return {
       ...data,
-      id: data.id || Date.now().toString(),
-      timestamp: data.timestamp || new Date().toISOString(),
-      status: 'active',
-      clearanceTime: data.clearanceTime || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      reportedBy: data.reportedBy || 'driver',
-      verified: false
+      coordinates: {
+        latitude: Number(coords.latitude),
+        longitude: Number(coords.longitude)
+      },
+      town: data.town || 'Ndola',
+      photo: data.photo || 'websocket-report'
     };
   }
 
@@ -193,20 +206,20 @@ class WebSocketServer {
 
   async removeAccident(accidentId) {
     try {
-      // Update accident status in database
-      await Accident.findByIdAndUpdate(accidentId, { 
+      if (!mongoose.Types.ObjectId.isValid(accidentId)) {
+        return;
+      }
+      await Accident.findByIdAndUpdate(accidentId, {
         status: 'cleared',
         clearedAt: new Date()
       });
 
-      // Broadcast removal to all clients
       this.broadcast({
         type: 'ACCIDENT_CLEARED',
-        accidentId
+        accidentId: String(accidentId)
       });
 
-      console.log(`Accident ${accidentId} automatically cleared after 1 hour`);
-
+      console.log(`Accident ${accidentId} automatically cleared after scheduled clearance`);
     } catch (error) {
       console.error('Error removing accident:', error);
     }
@@ -214,14 +227,14 @@ class WebSocketServer {
 
   async sendCurrentAccidents(clientId) {
     try {
-      const activeAccidents = await Accident.find({ 
-        status: 'active',
+      const activeAccidents = await Accident.find({
+        status: { $in: ['active', 'pending'] },
         clearanceTime: { $gt: new Date() }
       });
 
       this.sendToClient(clientId, {
         type: 'CURRENT_ACCIDENTS',
-        data: activeAccidents
+        data: activeAccidents.map((a) => a.toJSON())
       });
 
     } catch (error) {
