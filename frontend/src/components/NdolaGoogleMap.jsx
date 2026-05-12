@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, DirectionsRenderer, Polyline } from '@react-google-maps/api';
 
 const MAP_LIBRARIES = ['geometry'];
 
@@ -30,7 +30,15 @@ function normAccidents(list) {
         key: String(a.id || a._id || '')
       };
     })
-    .filter((a) => a.lat != null && a.lng != null && !['resolved', 'cleared'].includes(a.status));
+    .filter((a) => {
+      if (a.lat == null || a.lng == null) return false;
+      if (['resolved', 'cleared'].includes(a.status)) return false;
+      return (
+        a.verified === true &&
+        a.verificationStatus === 'approved' &&
+        a.status === 'active'
+      );
+    });
 }
 
 function NdolaGoogleMapInner({
@@ -38,7 +46,10 @@ function NdolaGoogleMapInner({
   hotspots = [],
   accidents = [],
   onRoadClick,
-  onNearbyAccident
+  onNearbyAccident,
+  pickLocationMode = false,
+  pickedLatLng = null,
+  onPickLatLng
 }) {
   const loaderId = `ndola-map-${googleMapsApiKey.slice(-12)}`;
   const { isLoaded, loadError } = useJsApiLoader({
@@ -50,6 +61,8 @@ function NdolaGoogleMapInner({
   const [userLoc, setUserLoc] = useState(null);
   const [selected, setSelected] = useState(null);
   const [directions, setDirections] = useState(null);
+  const [alternativePaths, setAlternativePaths] = useState([]);
+  const [directionsMessage, setDirectionsMessage] = useState(null);
   const lastNearbyKey = useRef('');
 
   const points = useMemo(() => normAccidents(accidents), [accidents]);
@@ -69,7 +82,7 @@ function NdolaGoogleMapInner({
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !userLoc || !onNearbyAccident || !window.google?.maps?.geometry) return;
+    if (pickLocationMode || !isLoaded || !userLoc || !onNearbyAccident || !window.google?.maps?.geometry) return;
     const haz = points.filter((a) => {
       const d = google.maps.geometry.spherical.computeDistanceBetween(
         new google.maps.LatLng(userLoc.lat, userLoc.lng),
@@ -84,10 +97,50 @@ function NdolaGoogleMapInner({
     if (key === lastNearbyKey.current) return;
     lastNearbyKey.current = key;
     if (haz.length) onNearbyAccident(haz);
-  }, [isLoaded, userLoc, points, onNearbyAccident]);
+  }, [pickLocationMode, isLoaded, userLoc, points, onNearbyAccident]);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.type === 'hotspot') {
+      const stillThere = (hotspots || []).some((h) => {
+        const lat = h.latitude ?? h.coordinates?.latitude;
+        const lng = h.longitude ?? h.coordinates?.longitude;
+        if (lat == null || lng == null) return false;
+        const idStr = String(h.id ?? '');
+        if (selected.key && idStr && selected.key === idStr) return true;
+        return Math.abs(lat - selected.lat) < 1e-5 && Math.abs(lng - selected.lng) < 1e-5;
+      });
+      if (!stillThere) {
+        setSelected(null);
+        setDirections(null);
+        setAlternativePaths([]);
+        setDirectionsMessage(null);
+      }
+      return;
+    }
+    const still = points.some((p) => p.key === selected.key);
+    if (!still) {
+      setSelected(null);
+      setDirections(null);
+      setAlternativePaths([]);
+      setDirectionsMessage(null);
+    }
+  }, [hotspots, points, selected]);
 
   const computeDetour = useCallback(() => {
-    if (!isLoaded || !userLoc || !selected || !window.google) return;
+    setDirectionsMessage(null);
+    setAlternativePaths([]);
+    if (!isLoaded || !selected || !window.google) return;
+    if (!userLoc) {
+      setDirectionsMessage(
+        'Turn on location access for this site (browser prompt), then try again. Detours are drawn from your position toward the city hub.'
+      );
+      return;
+    }
+    const hazardLat = selected.lat;
+    const hazardLng = selected.lng;
+    if (hazardLat == null || hazardLng == null) return;
+
     const service = new google.maps.DirectionsService();
     service.route(
       {
@@ -97,8 +150,16 @@ function NdolaGoogleMapInner({
         provideRouteAlternatives: true
       },
       (result, status) => {
-        if (status !== 'OK' || !result?.routes?.length) return;
-        const hazard = new google.maps.LatLng(selected.lat, selected.lng);
+        if (status !== 'OK' || !result?.routes?.length) {
+          setDirections(null);
+          setDirectionsMessage(
+            status !== 'OK'
+              ? `Could not load directions (${status}). Confirm the API key has the Directions API enabled.`
+              : 'No driving routes returned for this area.'
+          );
+          return;
+        }
+        const hazard = new google.maps.LatLng(hazardLat, hazardLng);
         let bestRoute = result.routes[0];
         let bestDist = -1;
         for (const route of result.routes) {
@@ -112,6 +173,11 @@ function NdolaGoogleMapInner({
             bestRoute = route;
           }
         }
+        const altPaths = result.routes
+          .filter((r) => r !== bestRoute)
+          .map((r) => r.overview_path || [])
+          .filter((path) => path.length > 1);
+        setAlternativePaths(altPaths);
         setDirections({
           ...result,
           routes: [bestRoute]
@@ -139,7 +205,21 @@ function NdolaGoogleMapInner({
               strokeColor: '#0f766e',
               strokeWeight: 2
             }}
-            onClick={() => onRoadClick?.(h.name)}
+            onClick={() => {
+              setDirections(null);
+              setAlternativePaths([]);
+              setDirectionsMessage(null);
+              setSelected({
+                type: 'hotspot',
+                lat,
+                lng,
+                key: String(h.id ?? `${lat}-${lng}`),
+                name: h.name,
+                severity: h.severity,
+                timePattern: h.timePattern || ''
+              });
+              onRoadClick?.(h.name);
+            }}
           />
         );
       })
@@ -172,8 +252,19 @@ function NdolaGoogleMapInner({
         options={{
           streetViewControl: false,
           mapTypeControl: false,
-          fullscreenControl: true
+          fullscreenControl: true,
+          draggableCursor: pickLocationMode ? 'crosshair' : undefined,
+          draggingCursor: pickLocationMode ? 'crosshair' : undefined
         }}
+        onClick={
+          pickLocationMode && onPickLatLng
+            ? (e) => {
+                const latLng = e.latLng;
+                if (!latLng) return;
+                onPickLatLng({ lat: latLng.lat(), lng: latLng.lng() });
+              }
+            : undefined
+        }
       >
         {userLoc && (
           <Marker
@@ -185,6 +276,26 @@ function NdolaGoogleMapInner({
               fillOpacity: 1,
               strokeColor: '#92400e',
               strokeWeight: 2
+            }}
+          />
+        )}
+
+        {pickLocationMode && pickedLatLng && (
+          <Marker
+            position={pickedLatLng}
+            draggable
+            onDragEnd={(e) => {
+              const ll = e.latLng;
+              if (!ll || !onPickLatLng) return;
+              onPickLatLng({ lat: ll.lat(), lng: ll.lng() });
+            }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 12,
+              fillColor: '#c026d3',
+              fillOpacity: 1,
+              strokeColor: '#fafafa',
+              strokeWeight: 3
             }}
           />
         )}
@@ -204,31 +315,90 @@ function NdolaGoogleMapInner({
               strokeWeight: 2
             }}
             onClick={() => {
-              setSelected(a);
               setDirections(null);
+              setAlternativePaths([]);
+              setDirectionsMessage(null);
+              setSelected({
+                type: 'accident',
+                ...a
+              });
               onRoadClick?.(a.roadName);
             }}
           />
         ))}
 
-        {directions && <DirectionsRenderer directions={directions} />}
+        {alternativePaths.map((path, idx) => (
+          <Polyline
+            key={`alt-route-${idx}`}
+            path={path}
+            options={{
+              strokeColor: '#64748b',
+              strokeWeight: 4,
+              strokeOpacity: 0.55,
+              geodesic: true,
+              zIndex: 1
+            }}
+          />
+        ))}
 
-        {selected && (
-          <InfoWindow position={{ lat: selected.lat, lng: selected.lng }} onCloseClick={() => setSelected(null)}>
+        {directions && (
+          <DirectionsRenderer
+            directions={directions}
+            options={{
+              polylineOptions: { strokeColor: '#0d9488', strokeWeight: 5, strokeOpacity: 0.92, zIndex: 2 },
+              suppressMarkers: false
+            }}
+          />
+        )}
+
+        {selected && selected.lat != null && selected.lng != null && (
+          <InfoWindow
+            position={{ lat: selected.lat, lng: selected.lng }}
+            onCloseClick={() => {
+              setSelected(null);
+              setDirections(null);
+              setAlternativePaths([]);
+              setDirectionsMessage(null);
+            }}
+          >
             <div className="gm-info">
-              <strong>{selected.roadName}</strong>
-              <div>{selected.town}</div>
-              <div>Severity: {selected.severity}</div>
-              <div style={{ marginTop: 8 }}>
-                <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
-                  Suggested detour (via city hub)
-                </button>
-              </div>
+              {selected.type === 'hotspot' ? (
+                <>
+                  <strong>Hotspot · {selected.name}</strong>
+                  <div>Severity: {selected.severity}</div>
+                  {selected.timePattern ? <div className="gm-info-muted">{selected.timePattern}</div> : null}
+                  <p className="gm-info-hint">
+                    Teal line is the suggested path (keeps farther from this hotspot). Gray lines are other driving options when Google returns more than one route.
+                  </p>
+                  {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
+                  <div style={{ marginTop: 8 }}>
+                    <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
+                      Show alternate routes
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <strong>{selected.roadName}</strong>
+                  <div>{selected.town}</div>
+                  <div>Severity: {selected.severity}</div>
+                  <p className="gm-info-hint">
+                    Teal line prefers staying farthest from this incident; gray lines show other returned routes when Google offers them.
+                  </p>
+                  {directionsMessage ? <p className="gm-info-warning">{directionsMessage}</p> : null}
+                  <div style={{ marginTop: 8 }}>
+                    <button type="button" className="btn btn-primary map-detour-btn" onClick={computeDetour}>
+                      Show alternate routes
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </InfoWindow>
         )}
       </GoogleMap>
 
+      {!pickLocationMode && (
       <div className="map-legend-panel">
         <div className="map-legend-title">Legend</div>
         <ul className="map-legend-list">
@@ -252,6 +422,7 @@ function NdolaGoogleMapInner({
           </li>
         </ul>
       </div>
+      )}
     </div>
   );
 }

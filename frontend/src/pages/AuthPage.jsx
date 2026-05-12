@@ -140,13 +140,15 @@ export default function AuthPage({ user, onAuth, authError }) {
             <div className="form-group">
               <label className="form-label">
                 <span className="label-icon svg-icon-wrap" aria-hidden>
-                  <IconUser />
+                  {mode === 'login' ? <IconMail /> : <IconUser />}
                 </span>
-                Username
+                {mode === 'login' ? 'Username or email' : 'Username'}
               </label>
               <input
                 className="form-input"
-                placeholder="Choose a username"
+                type={mode === 'login' ? 'text' : 'text'}
+                autoComplete={mode === 'login' ? 'username' : 'username'}
+                placeholder={mode === 'login' ? 'Your username or email' : 'Choose a username'}
                 value={form.username}
                 onChange={(e) => setForm((current) => ({ ...current, username: e.target.value }))}
                 required

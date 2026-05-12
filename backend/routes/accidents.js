@@ -4,6 +4,8 @@ const Accident = require('../models/Accident');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const { verifyToken, requireAdmin, optionalVerifyToken } = require('../middleware/auth');
+const emailService = require('../services/emailService');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -36,6 +38,39 @@ function broadcast(app, message) {
     app.locals.websocketServer.broadcast(message);
   }
 }
+
+router.get('/', optionalVerifyToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const skip = (page - 1) * limit;
+
+    const isAdmin = req.user?.role === 'admin';
+    const query = isAdmin
+      ? {}
+      : {
+          verified: true,
+          verificationStatus: 'approved',
+          status: 'active',
+          clearanceTime: { $gt: new Date() }
+        };
+
+    const accidents = await Accident.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
+    const total = await Accident.countDocuments(query);
+
+    res.json({
+      accidents: accidents.map((a) => a.toJSON()),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get('/active', async (req, res) => {
   try {
@@ -93,10 +128,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
       photoUrl: req.file ? `/uploads/accidents/${req.file.filename}` : ''
     });
 
-    broadcast(req.app, {
-      type: 'ACCIDENT_REPORTED',
-      accident: accident.toJSON()
-    });
+    emailService.notifyAdminNewReport(accident).catch((e) => console.error('[email] admin notify:', e.message));
 
     res.status(201).json({
       success: true,
@@ -112,12 +144,17 @@ router.post('/', upload.single('photo'), async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const accident = await Accident.findById(req.params.id);
     if (!accident) {
       return res.status(404).json({ error: 'Accident not found' });
     }
+
+    const prevApproved =
+      accident.verified &&
+      accident.verificationStatus === 'approved' &&
+      accident.status === 'active';
 
     const updates = { ...req.body };
     delete updates._id;
@@ -146,10 +183,28 @@ router.put('/:id', async (req, res) => {
     Object.assign(accident, updates);
     await accident.save();
 
+    const nowApproved =
+      accident.verified &&
+      accident.verificationStatus === 'approved' &&
+      accident.status === 'active';
+    const newlyPublished = !prevApproved && nowApproved;
+
+    if (prevApproved && !nowApproved) {
+      broadcast(req.app, {
+        type: 'ACCIDENT_CLEARED',
+        accidentId: accident._id.toString()
+      });
+    }
+
     broadcast(req.app, {
       type: 'ACCIDENT_UPDATE',
-      accident: accident.toJSON()
+      accident: accident.toJSON(),
+      ...(newlyPublished && { newlyPublished: true })
     });
+
+    if (newlyPublished) {
+      emailService.notifyDriversPublishedAccident(accident).catch((e) => console.error('[email] drivers:', e.message));
+    }
 
     res.json({
       success: true,
@@ -161,7 +216,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const accident = await Accident.findByIdAndUpdate(
       req.params.id,
@@ -207,7 +262,7 @@ router.get('/:id/routes', async (req, res) => {
   }
 });
 
-router.post('/:id/routes', async (req, res) => {
+router.post('/:id/routes', verifyToken, requireAdmin, async (req, res) => {
   try {
     const accident = await Accident.findById(req.params.id);
     if (!accident) {
@@ -229,29 +284,6 @@ router.post('/:id/routes', async (req, res) => {
       success: true,
       route: accident.safeRoutes[accident.safeRoutes.length - 1],
       message: 'Safe route added successfully'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.get('/', async (req, res) => {
-  try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 50;
-    const skip = (page - 1) * limit;
-
-    const accidents = await Accident.find().sort({ createdAt: -1 }).skip(skip).limit(limit);
-    const total = await Accident.countDocuments();
-
-    res.json({
-      accidents: accidents.map((a) => a.toJSON()),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

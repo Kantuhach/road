@@ -2191,10 +2191,53 @@ img {
   min-width: 180px;
 }
 
-.verification-help {
+.gm-info-muted {
   color: #64748b;
-  margin: 0 0 12px;
-  font-size: 0.95rem;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.gm-info-hint {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.gm-info-warning {
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.active-incident-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.active-incident-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+}
+
+.active-incident-select {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.active-incident-note {
+  min-height: 52px;
+}
+
+.active-incident-card {
+  align-items: flex-start;
 }
 
 .verification-section-title {
@@ -3231,6 +3274,232 @@ img {
 .settings-feedback.error {
   color: #b91c1c;
   font-weight: 600;
+}
+
+.admin-settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.glass-card--flush {
+  padding: 22px 26px;
+}
+
+.admin-hotspot-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-hotspot-intro-head {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.admin-hotspot-intro-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(13, 148, 136, 0.18);
+  border: 1px solid rgba(13, 148, 136, 0.35);
+}
+
+.admin-hotspot-intro-title {
+  margin: 0 0 8px;
+  font-size: 1.28rem;
+}
+
+.admin-hotspot-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.admin-hotspot-map-panel {
+  padding: 20px 22px 24px;
+}
+
+.admin-hotspot-map-panel .google-map-wrap {
+  min-height: min(52vh, 520px);
+}
+
+.admin-hotspot-map-head h3 {
+  margin: 0 0 6px;
+}
+
+.admin-hotspot-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-hotspot-form-card h3,
+.admin-hotspot-list-card h3 {
+  margin: 0 0 16px;
+}
+
+.admin-hotspot-coord-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.admin-hotspot-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.admin-hotspot-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(52vh, 480px);
+  overflow-y: auto;
+}
+
+.admin-hotspot-tile {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.admin-hotspot-tile--active {
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+}
+
+.admin-hotspot-sev {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.admin-hotspot-sev--low {
+  background: rgba(22, 163, 74, 0.15);
+  color: #15803d;
+}
+
+.admin-hotspot-sev--medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #a16207;
+}
+
+.admin-hotspot-sev--high {
+  background: rgba(249, 115, 22, 0.18);
+  color: #c2410c;
+}
+
+.admin-hotspot-sev--critical {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+}
+
+.admin-hotspot-tile-meta {
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.admin-hotspot-tile-coords {
+  font-size: 0.78rem;
+  margin-top: 6px;
+}
+
+.admin-hotspot-tile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.danger-outline {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #b91c1c;
+}
+
+.admin-email-form .checkbox-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-email-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+.admin-email-test {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  margin-top: 8px;
+}
+
+.admin-email-test .settings-label {
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-users-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.25fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.admin-users-form .settings-label {
+  margin-bottom: 0;
+}
+
+.admin-users-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.admin-role-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.admin-role-pill--driver {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+}
+
+.admin-role-pill--admin {
+  background: rgba(13, 148, 136, 0.18);
+  color: #0f766e;
+}
+
+@media (max-width: 1100px) {
+  .admin-hotspot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 960px) {

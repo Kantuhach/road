@@ -2,6 +2,14 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Hotspot = require('../models/Hotspot');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
+const emailService = require('../services/emailService');
+
+function broadcast(app, message) {
+  if (app.locals.websocketServer) {
+    app.locals.websocketServer.broadcast(message);
+  }
+}
 
 router.get('/', async (_req, res) => {
   try {
@@ -33,7 +41,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const {
       name,
@@ -64,6 +72,13 @@ router.post('/', async (req, res) => {
       timePattern: timePattern || ''
     });
 
+    broadcast(req.app, {
+      type: 'HOTSPOT_CREATED',
+      hotspot: doc.toJSON()
+    });
+
+    emailService.notifyDriversNewHotspot(doc).catch((e) => console.error('[email] hotspot:', e.message));
+
     res.status(201).json({
       success: true,
       hotspot: doc.toJSON(),
@@ -74,7 +89,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'Hotspot not found' });
@@ -92,6 +107,11 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Hotspot not found' });
     }
 
+    broadcast(req.app, {
+      type: 'HOTSPOT_UPDATED',
+      hotspot: doc.toJSON()
+    });
+
     res.json({
       success: true,
       hotspot: doc.toJSON(),
@@ -102,7 +122,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'Hotspot not found' });
@@ -112,6 +132,11 @@ router.delete('/:id', async (req, res) => {
     if (!doc) {
       return res.status(404).json({ error: 'Hotspot not found' });
     }
+
+    broadcast(req.app, {
+      type: 'HOTSPOT_REMOVED',
+      id: req.params.id
+    });
 
     res.json({
       success: true,

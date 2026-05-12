@@ -6,6 +6,15 @@ import DriverShell from '../components/DriverShell';
 import websocketService from '../services/websocketService';
 import { IconAlertTriangle, IconCircleLive, IconMapPin } from '../components/Icons';
 
+function accidentKey(a) {
+  return String(a?.id ?? a?._id ?? '');
+}
+
+function isPublishedAccident(a) {
+  if (!a || ['resolved', 'cleared'].includes(a.status)) return false;
+  return a.verified === true && a.verificationStatus === 'approved' && a.status === 'active';
+}
+
 export default function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
   const [hotspots, setHotspots] = useState([]);
@@ -69,41 +78,42 @@ export default function Dashboard({ user, onLogout }) {
       
       websocketService.on('message', (data) => {
         try {
-          if (data.type === 'ACCIDENT_REPORTED') {
-            const incoming = data.accident;
-            setAccidents((prev) => {
-              const exists = prev.some(
-                (p) => String(p.id) === String(incoming.id) || String(p._id) === String(incoming.id)
-              );
-              if (exists) return prev;
-              return [incoming, ...prev];
-            });
-            setStatusMessage('New accident reported! Updating map...');
-            
-            // Show notification
-            showAccidentNotification(data.accident);
-          } else if (data.type === 'ACCIDENT_CLEARED') {
-            // Update accident status
-            setAccidents((prev) =>
-              prev.map((acc) =>
-                String(acc.id) === String(data.accidentId) || String(acc._id) === String(data.accidentId)
-                  ? { ...acc, status: 'resolved' }
-                  : acc
-              )
-            );
-            setStatusMessage('Accident resolved! Route updated...');
+          if (data.type === 'ACCIDENT_CLEARED') {
+            setAccidents((prev) => prev.filter((acc) => accidentKey(acc) !== String(data.accidentId)));
+            setStatusMessage('Incident cleared — route updated.');
           } else if (data.type === 'ACCIDENT_UPDATE') {
             const updated = data.accident;
+            const id = accidentKey(updated);
             setAccidents((prev) => {
-              const idx = prev.findIndex(
-                (acc) => String(acc.id) === String(updated.id) || String(acc._id) === String(updated.id)
-              );
-              if (idx === -1) return [updated, ...prev];
-              const copy = [...prev];
-              copy[idx] = updated;
-              return copy;
+              const rest = prev.filter((acc) => accidentKey(acc) !== id);
+              if (!isPublishedAccident(updated)) return rest;
+              return [updated, ...rest];
             });
-            setStatusMessage('Accident information updated...');
+            if (data.newlyPublished && isPublishedAccident(updated)) {
+              showAccidentNotification(updated);
+              setStatusMessage('New verified incident published on the map.');
+            } else {
+              setStatusMessage('Incident information updated.');
+            }
+          } else if (data.type === 'HOTSPOT_CREATED') {
+            const h = data.hotspot;
+            if (!h) return;
+            const hid = String(h.id ?? h._id);
+            setHotspots((prev) => {
+              if (prev.some((p) => String(p.id) === hid)) return prev;
+              return [{ ...h, id: hid }, ...prev];
+            });
+            setStatusMessage('New hotspot added to the map.');
+          } else if (data.type === 'HOTSPOT_UPDATED') {
+            const h = data.hotspot;
+            if (!h) return;
+            const hid = String(h.id ?? h._id);
+            setHotspots((prev) => prev.map((p) => (String(p.id) === hid ? { ...h, id: hid } : p)));
+            setStatusMessage('Hotspot updated.');
+          } else if (data.type === 'HOTSPOT_REMOVED') {
+            const id = String(data.id);
+            setHotspots((prev) => prev.filter((p) => String(p.id) !== id));
+            setStatusMessage('A hotspot was removed from the map.');
           }
         } catch (error) {
           console.error('WebSocket message error:', error);

@@ -28,4 +28,19 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { verifyToken, requireAdmin, JWT_SECRET };
+/** Attach req.user when Bearer token is valid; otherwise continue (no error). */
+function optionalVerifyToken(req, _res, next) {
+  const raw = req.headers.authorization;
+  const token = raw?.startsWith('Bearer ') ? raw.slice(7) : null;
+  if (!token) {
+    return next();
+  }
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+  } catch {
+    req.user = undefined;
+  }
+  next();
+}
+
+module.exports = { verifyToken, optionalVerifyToken, requireAdmin, JWT_SECRET };

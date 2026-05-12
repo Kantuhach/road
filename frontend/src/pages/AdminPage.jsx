@@ -4,9 +4,12 @@ import axios from 'axios';
 import HotspotAdmin from '../components/HotspotAdmin';
 import AccidentVerificationPanel from '../components/AccidentVerificationPanel';
 import AdminMapSettings from '../components/AdminMapSettings';
+import AdminEmailSettings from '../components/AdminEmailSettings';
+import AdminUsersPanel from '../components/AdminUsersPanel';
 import {
   IconShield,
   IconLogout,
+  IconUser,
   IconChart,
   IconAlertTriangle,
   IconMapPin,
@@ -20,9 +23,10 @@ import {
 const TAB_COPY = {
   dashboard: { title: 'Overview', subtitle: 'System pulse at a glance.' },
   accidents: { title: 'Incident queue', subtitle: 'Verify driver reports and manage clearance.' },
-  hotspots: { title: 'Hotspots', subtitle: 'Maintain high-risk corridor markers.' },
+  hotspots: { title: 'Hotspots', subtitle: 'Place corridors on the map — drivers see them live.' },
   analytics: { title: 'Analytics', subtitle: 'Quick counts from live data.' },
-  settings: { title: 'Settings', subtitle: 'Integrations and API keys.' }
+  users: { title: 'Users', subtitle: 'Create accounts — drivers sign in with username or email.' },
+  settings: { title: 'Settings', subtitle: 'Maps API key, SMTP email, and notifications.' }
 };
 
 export default function AdminPage({ appUser, setAppUser }) {
@@ -36,6 +40,8 @@ export default function AdminPage({ appUser, setAppUser }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
+  const [googleMapsApiKey, setGoogleMapsApiKey] = useState('');
+
   useEffect(() => {
     if (appUser?.role === 'admin') {
       setAuthenticated(true);
@@ -43,11 +49,19 @@ export default function AdminPage({ appUser, setAppUser }) {
   }, [appUser]);
 
   useEffect(() => {
+    if (!authenticated) return;
+    axios
+      .get('/api/settings/maps')
+      .then((res) => setGoogleMapsApiKey(typeof res.data?.googleMapsApiKey === 'string' ? res.data.googleMapsApiKey.trim() : ''))
+      .catch(() => setGoogleMapsApiKey(''));
+  }, [authenticated]);
+
+  useEffect(() => {
     if (authenticated) {
       loadHotspots();
       loadAccidents();
     }
-  }, [authenticated]);
+  }, [authenticated, appUser?.token]);
 
   const stats = useMemo(
     () => ({
@@ -73,7 +87,9 @@ export default function AdminPage({ appUser, setAppUser }) {
 
   const loadAccidents = async () => {
     try {
-      const response = await axios.get('/api/accidents');
+      const token = appUser?.token;
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get('/api/accidents', { headers });
       const list = response.data.accidents ?? response.data;
       setAccidents(Array.isArray(list) ? list : []);
     } catch (e) {
@@ -206,7 +222,7 @@ export default function AdminPage({ appUser, setAppUser }) {
             </p>
             <form className="auth-form modern-form" onSubmit={handleLogin}>
               <label className="form-label-block">
-                Username
+                Username or email
                 <input
                   value={form.username}
                   onChange={(e) => setForm((c) => ({ ...c, username: e.target.value }))}
@@ -275,6 +291,13 @@ export default function AdminPage({ appUser, setAppUser }) {
               </button>
               <button
                 type="button"
+                className={`admin-side-link${activeTab === 'users' ? ' active' : ''}`}
+                onClick={() => setActiveTab('users')}
+              >
+                <IconUser /> Users
+              </button>
+              <button
+                type="button"
                 className={`admin-side-link${activeTab === 'settings' ? ' active' : ''}`}
                 onClick={() => setActiveTab('settings')}
               >
@@ -334,8 +357,9 @@ export default function AdminPage({ appUser, setAppUser }) {
                   <section className="glass-card welcome-admin-card">
                     <h2>Welcome back</h2>
                     <p className="muted">
-                      Use <strong>Incidents</strong> to approve driver reports, <strong>Hotspots</strong> for corridor
-                      markers, and <strong>Settings</strong> to configure the Google Maps API key for all drivers.
+                      <strong>Incidents</strong> — approve reports before they appear on driver maps.{' '}
+                      <strong>Hotspots</strong> — click the map to pin and save. <strong>Users</strong> — add accounts with email;
+                      sign-in accepts username or email. <strong>Settings</strong> — Maps API and SMTP.
                     </p>
                   </section>
                 </div>
@@ -347,25 +371,25 @@ export default function AdminPage({ appUser, setAppUser }) {
                     <h2>Verification queue</h2>
                     <span className="pill">{stats.pendingVerify} pending review</span>
                   </div>
-                  <AccidentVerificationPanel accidents={accidents} onRefresh={loadAccidents} />
+                  <AccidentVerificationPanel accidents={accidents} onRefresh={loadAccidents} authToken={authToken} />
                 </section>
               )}
 
               {activeTab === 'hotspots' && (
-                <section className="glass-card">
-                  <HotspotAdmin
-                    hotspots={hotspots}
-                    onHotspotSaved={(updated) => {
-                      const exists = hotspots.some((h) => String(h.id) === String(updated.id));
-                      setHotspots((current) =>
-                        exists
-                          ? current.map((h) => (String(h.id) === String(updated.id) ? updated : h))
-                          : [...current, updated]
-                      );
-                    }}
-                    onHotspotDeleted={(id) => setHotspots((current) => current.filter((h) => h.id !== id))}
-                  />
-                </section>
+                <HotspotAdmin
+                  hotspots={hotspots}
+                  authToken={authToken}
+                  googleMapsApiKey={googleMapsApiKey}
+                  onHotspotSaved={(updated) => {
+                    const exists = hotspots.some((h) => String(h.id) === String(updated.id));
+                    setHotspots((current) =>
+                      exists
+                        ? current.map((h) => (String(h.id) === String(updated.id) ? updated : h))
+                        : [...current, updated]
+                    );
+                  }}
+                  onHotspotDeleted={(id) => setHotspots((current) => current.filter((h) => h.id !== id))}
+                />
               )}
 
               {activeTab === 'analytics' && (
@@ -399,7 +423,14 @@ export default function AdminPage({ appUser, setAppUser }) {
                 </div>
               )}
 
-              {activeTab === 'settings' && authToken && <AdminMapSettings authToken={authToken} />}
+              {activeTab === 'users' && authToken && <AdminUsersPanel authToken={authToken} />}
+
+              {activeTab === 'settings' && authToken && (
+                <div className="stack-gap admin-settings-stack">
+                  <AdminMapSettings authToken={authToken} />
+                  <AdminEmailSettings authToken={authToken} />
+                </div>
+              )}
             </div>
           </main>
         </div>

@@ -96,7 +96,9 @@ accidentSchema.pre('validate', function syncGeo(next) {
 
 accidentSchema.statics.findActive = function findActive() {
   return this.find({
-    status: { $in: ['active', 'pending'] },
+    verified: true,
+    verificationStatus: 'approved',
+    status: 'active',
     clearanceTime: { $gt: new Date() }
   }).sort({ createdAt: -1 });
 };
@@ -112,7 +114,9 @@ accidentSchema.statics.findNearby = function findNearby(latitude, longitude, rad
         $maxDistance: radiusKm * 1000
       }
     },
-    status: { $in: ['active', 'pending'] },
+    verified: true,
+    verificationStatus: 'approved',
+    status: 'active',
     clearanceTime: { $gt: new Date() }
   });
 };

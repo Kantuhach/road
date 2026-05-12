@@ -71,8 +71,12 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/road-acci
     console.log(`WebSocket server on port ${wsServer.port}`);
   });
 })
-.catch(err => {
-  console.error('MongoDB connection error:', err);
+.catch((err) => {
+  console.error('MongoDB connection error:', err.message || err);
+  console.error(
+    '\nFix: run MongoDB locally, or set MONGODB_URI in backend/.env (see .env.example).\n' +
+      'Then restart with: npm start   or   npm run dev\n'
+  );
   process.exit(1);
 });
 

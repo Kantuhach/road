@@ -1,7 +1,97 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-export default function AccidentVerificationPanel({ accidents, onRefresh }) {
+function ActiveIncidentRow({ accident, authHeaders, busyId, setBusyId, onNotify, onRefresh }) {
+  const [nextStatus, setNextStatus] = useState('active');
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    setNextStatus('active');
+    setNote('');
+  }, [accident.id]);
+
+  const save = async () => {
+    if (nextStatus === 'active') {
+      onNotify('Pick Resolved or Removed from map to apply a change.');
+      return;
+    }
+    setBusyId(accident.id);
+    try {
+      let payload;
+      if (nextStatus === 'resolved') {
+        payload = {
+          status: 'resolved',
+          verificationReason: note || 'Scene cleared — road usable.'
+        };
+      } else {
+        payload = {
+          verified: false,
+          verificationStatus: 'rejected',
+          status: 'cleared',
+          verificationReason: note || 'Removed from map by admin.'
+        };
+      }
+      await axios.put(`/api/accidents/${accident.id}`, payload, { headers: authHeaders });
+      onNotify(
+        nextStatus === 'resolved'
+          ? 'Incident marked resolved. It is no longer shown on driver maps.'
+          : 'Incident cleared. Drivers no longer see this pin.'
+      );
+      setNote('');
+      onRefresh?.();
+    } catch (e) {
+      onNotify('Unable to update incident status.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="accident-verification-card active-incident-card">
+      <div className="accident-info">
+        <h4>
+          {accident.town} — {accident.roadName}
+        </h4>
+        <p>Severity: {accident.severity}</p>
+      </div>
+      <div className="active-incident-controls">
+        <label className="active-incident-label" htmlFor={`status-${accident.id}`}>
+          Map status
+        </label>
+        <select
+          id={`status-${accident.id}`}
+          className="active-incident-select"
+          value={nextStatus}
+          onChange={(e) => setNextStatus(e.target.value)}
+          disabled={busyId === accident.id}
+        >
+          <option value="active">Active on driver map</option>
+          <option value="resolved">Resolved (road clear)</option>
+          <option value="cleared">Removed from map / rejected</option>
+        </select>
+        <textarea
+          className="reason-textarea active-incident-note"
+          placeholder="Optional note (shown on audit / emails where applicable)…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          disabled={busyId === accident.id}
+        />
+        <button
+          type="button"
+          className="btn-secondary-admin"
+          disabled={busyId === accident.id}
+          onClick={save}
+        >
+          Save status
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function AccidentVerificationPanel({ accidents, onRefresh, authToken }) {
+  const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const [selectedId, setSelectedId] = useState(null);
   const [verificationReason, setVerificationReason] = useState('');
   const [message, setMessage] = useState('');
@@ -19,12 +109,16 @@ export default function AccidentVerificationPanel({ accidents, onRefresh }) {
   const approve = async (id) => {
     setBusyId(id);
     try {
-      await axios.put(`/api/accidents/${id}`, {
-        verified: true,
-        verifiedBy: 'admin',
-        verificationStatus: 'approved',
-        status: 'active'
-      });
+      await axios.put(
+        `/api/accidents/${id}`,
+        {
+          verified: true,
+          verifiedBy: 'admin',
+          verificationStatus: 'approved',
+          status: 'active'
+        },
+        { headers: authHeaders }
+      );
       notify('Report verified and published on the map.');
       setSelectedId(null);
       setVerificationReason('');
@@ -39,12 +133,16 @@ export default function AccidentVerificationPanel({ accidents, onRefresh }) {
   const reject = async (id) => {
     setBusyId(id);
     try {
-      await axios.put(`/api/accidents/${id}`, {
-        verified: false,
-        verificationStatus: 'rejected',
-        status: 'cleared',
-        verificationReason: verificationReason || 'Rejected by admin'
-      });
+      await axios.put(
+        `/api/accidents/${id}`,
+        {
+          verified: false,
+          verificationStatus: 'rejected',
+          status: 'cleared',
+          verificationReason: verificationReason || 'Rejected by admin'
+        },
+        { headers: authHeaders }
+      );
       notify('Report rejected and cleared.');
       setSelectedId(null);
       setVerificationReason('');
@@ -56,15 +154,21 @@ export default function AccidentVerificationPanel({ accidents, onRefresh }) {
     }
   };
 
-  const activeIncidents = (accidents || []).filter((a) => a.verified && a.status === 'active');
+  const activeIncidents = (accidents || []).filter(
+    (a) => a.verified && a.verificationStatus === 'approved' && a.status === 'active'
+  );
 
   const markResolved = async (id) => {
     setBusyId(id);
     try {
-      await axios.put(`/api/accidents/${id}`, {
-        status: 'resolved',
-        verificationReason: verificationReason || 'Scene cleared — road usable.'
-      });
+      await axios.put(
+        `/api/accidents/${id}`,
+        {
+          status: 'resolved',
+          verificationReason: verificationReason || 'Scene cleared — road usable.'
+        },
+        { headers: authHeaders }
+      );
       notify('Accident marked resolved. Drivers will see the route as open.');
       setSelectedId(null);
       setVerificationReason('');
@@ -175,22 +279,15 @@ export default function AccidentVerificationPanel({ accidents, onRefresh }) {
       ) : (
         <div className="pending-accidents-list">
           {activeIncidents.map((accident) => (
-            <div key={accident.id} className="accident-verification-card">
-              <div className="accident-info">
-                <h4>
-                  {accident.town} — {accident.roadName}
-                </h4>
-                <p>Severity: {accident.severity}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary-admin"
-                disabled={busyId === accident.id}
-                onClick={() => markResolved(accident.id)}
-              >
-                Mark road clear
-              </button>
-            </div>
+            <ActiveIncidentRow
+              key={accident.id}
+              accident={accident}
+              authHeaders={authHeaders}
+              busyId={busyId}
+              setBusyId={setBusyId}
+              onNotify={notify}
+              onRefresh={onRefresh}
+            />
           ))}
         </div>
       )}
