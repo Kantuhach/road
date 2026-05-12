@@ -7,8 +7,8 @@ export const NDOLA_CENTER = { lat: -12.9697, lng: 28.6367 };
 
 const containerStyle = {
   width: '100%',
-  height: 'min(62vh, 560px)',
-  borderRadius: '12px'
+  height: 'min(58vh, 520px)',
+  borderRadius: '16px'
 };
 
 const severityColor = {
@@ -33,11 +33,17 @@ function normAccidents(list) {
     .filter((a) => a.lat != null && a.lng != null && !['resolved', 'cleared'].includes(a.status));
 }
 
-export default function NdolaGoogleMap({ hotspots = [], accidents = [], onRoadClick, onNearbyAccident }) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+function NdolaGoogleMapInner({
+  googleMapsApiKey,
+  hotspots = [],
+  accidents = [],
+  onRoadClick,
+  onNearbyAccident
+}) {
+  const loaderId = `ndola-map-${googleMapsApiKey.slice(-12)}`;
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'ndola-road-map',
-    googleMapsApiKey: apiKey,
+    id: loaderId,
+    googleMapsApiKey,
     libraries: MAP_LIBRARIES
   });
 
@@ -128,9 +134,9 @@ export default function NdolaGoogleMap({ hotspots = [], accidents = [], onRoadCl
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
               scale: 7,
-              fillColor: '#0ea5e9',
-              fillOpacity: 0.85,
-              strokeColor: '#0369a1',
+              fillColor: '#14b8a6',
+              fillOpacity: 0.9,
+              strokeColor: '#0f766e',
               strokeWeight: 2
             }}
             onClick={() => onRoadClick?.(h.name)}
@@ -140,28 +146,17 @@ export default function NdolaGoogleMap({ hotspots = [], accidents = [], onRoadCl
       .filter(Boolean);
   }, [hotspots, onRoadClick, isLoaded]);
 
-  if (!apiKey) {
-    return (
-      <div className="map-api-missing">
-        <p>
-          Set <code>VITE_GOOGLE_MAPS_API_KEY</code> in <code>frontend/.env</code> and restart Vite. Enable Maps JavaScript API
-          and Directions API for your Google Cloud project.
-        </p>
-      </div>
-    );
-  }
-
   if (loadError) {
     return (
       <div className="map-api-missing">
-        <p>Google Maps failed to load. Check the browser console and your API key restrictions.</p>
+        <p>Google Maps failed to load. Confirm your API key in Admin Settings has Maps JavaScript API and Directions API enabled.</p>
       </div>
     );
   }
 
   if (!isLoaded) {
     return (
-      <div className="map-loading">
+      <div className="map-loading map-loading-card">
         <span className="loading-spinner" />
         Loading map…
       </div>
@@ -169,7 +164,7 @@ export default function NdolaGoogleMap({ hotspots = [], accidents = [], onRoadCl
   }
 
   return (
-    <div className="google-map-wrap">
+    <div className="google-map-wrap google-map-wrap-elevated">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={NDOLA_CENTER}
@@ -247,16 +242,37 @@ export default function NdolaGoogleMap({ hotspots = [], accidents = [], onRoadCl
             <span className="legend-dot legend-accident-low" /> Low
           </li>
           <li>
-            <span className="legend-dot legend-route" /> Detour route (when generated)
+            <span className="legend-dot legend-route" /> Detour route
           </li>
           <li>
             <span className="legend-dot legend-hotspot" /> Hotspot
           </li>
           <li>
-            <span className="legend-dot legend-you" /> Your position
+            <span className="legend-dot legend-you" /> You
           </li>
         </ul>
       </div>
     </div>
   );
+}
+
+export default function NdolaGoogleMap(props) {
+  const envKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const fromProps = props.googleMapsApiKey ? String(props.googleMapsApiKey).trim() : '';
+  const resolved = fromProps || envKey;
+
+  if (!resolved) {
+    return (
+      <div className="map-api-missing map-api-missing-card">
+        <p className="map-api-title">Map unavailable</p>
+        <p>
+          Your administrator must add a Google Maps API key under{' '}
+          <strong>Admin → Settings</strong>. Developers can still use{' '}
+          <code>VITE_GOOGLE_MAPS_API_KEY</code> in <code>frontend/.env</code>.
+        </p>
+      </div>
+    );
+  }
+
+  return <NdolaGoogleMapInner {...props} googleMapsApiKey={resolved} />;
 }

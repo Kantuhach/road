@@ -2,9 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-
-const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const { verifyToken, JWT_SECRET } = require('../middleware/auth');
 
 router.post('/login', async (req, res) => {
   try {
@@ -96,25 +94,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({
-      error: 'No token provided',
-      message: 'Access token is required'
-    });
-  }
-  try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({
-      error: 'Invalid token',
-      message: 'Token is invalid or expired'
-    });
-  }
-};
-
 router.get('/me', verifyToken, (req, res) => {
   res.json({
     user: req.user,
@@ -130,4 +109,3 @@ router.post('/logout', (_req, res) => {
 });
 
 module.exports = router;
-module.exports.verifyToken = verifyToken;

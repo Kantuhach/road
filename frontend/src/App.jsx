@@ -89,7 +89,7 @@ export default function App() {
           path="/report"
           element={
             user && user.role !== 'admin' ? (
-              <ReportPage user={user} />
+              <ReportPage user={user} onLogout={handleLogout} />
             ) : (
               <Navigate to="/auth" replace />
             )

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import HotspotAdmin from '../components/HotspotAdmin';
 import AccidentVerificationPanel from '../components/AccidentVerificationPanel';
+import AdminMapSettings from '../components/AdminMapSettings';
 import {
   IconShield,
   IconUser,
@@ -14,8 +15,17 @@ import {
   IconSearch,
   IconClipboard,
   IconCheck,
-  IconHourglass
+  IconHourglass,
+  IconSettings
 } from '../components/Icons';
+
+const TAB_COPY = {
+  dashboard: { title: 'Overview', subtitle: 'System pulse at a glance.' },
+  accidents: { title: 'Incident queue', subtitle: 'Verify driver reports and manage clearance.' },
+  hotspots: { title: 'Hotspots', subtitle: 'Maintain high-risk corridor markers.' },
+  analytics: { title: 'Analytics', subtitle: 'Quick counts from live data.' },
+  settings: { title: 'Settings', subtitle: 'Integrations and API keys.' }
+};
 
 export default function AdminPage({ appUser, setAppUser }) {
   const navigate = useNavigate();
@@ -74,14 +84,10 @@ export default function AdminPage({ appUser, setAppUser }) {
     }
   };
 
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
-
-  const filteredAccidents = accidents.filter(accident => {
-    const matchesSearch = accident.roadName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          accident.town?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredAccidents = accidents.filter((accident) => {
+    const matchesSearch =
+      accident.roadName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      accident.town?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || accident.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -120,807 +126,286 @@ export default function AdminPage({ appUser, setAppUser }) {
     navigate('/');
   };
 
+  const statsCards = (
+    <div className="stats-grid modern-stats-grid">
+      <div className="stat-card glass-stat primary">
+        <div className="stat-icon svg-icon-wrap">
+          <IconAlertTriangle />
+        </div>
+        <div className="stat-info">
+          <h3>Active alerts</h3>
+          <span className="stat-value">{stats.activeAlerts}</span>
+        </div>
+      </div>
+      <div className="stat-card glass-stat success">
+        <div className="stat-icon svg-icon-wrap">
+          <IconCheck />
+        </div>
+        <div className="stat-info">
+          <h3>Verified</h3>
+          <span className="stat-value">{stats.verified}</span>
+        </div>
+      </div>
+      <div className="stat-card glass-stat warning">
+        <div className="stat-icon svg-icon-wrap">
+          <IconHourglass />
+        </div>
+        <div className="stat-info">
+          <h3>Pending review</h3>
+          <span className="stat-value">{stats.pendingVerify}</span>
+        </div>
+      </div>
+      <div className="stat-card glass-stat danger">
+        <div className="stat-icon svg-icon-wrap">
+          <IconMapPin />
+        </div>
+        <div className="stat-info">
+          <h3>Hotspots</h3>
+          <span className="stat-value">{stats.totalHotspots}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const authToken = appUser?.token;
+
   return (
-    <div className="auth-shell rtsa-shell">
-      <div className="auth-card rtsa-card">
-        <style>{`
-          .rtsa-shell {
-            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 50%, #1e293b 100%);
-            min-height: 100vh;
-          }
-          
-          .rtsa-card {
-            background: rgba(255, 255, 255, 0.98);
-            border: 2px solid #1e40af;
-            box-shadow: 0 20px 40px rgba(30, 64, 175, 0.2);
-          }
-          
-          .rtsa-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: linear-gradient(135deg, #1e40af, #1e3a8a);
-            padding: 8px 16px;
-            border-radius: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
-          }
-          
-          .rtsa-icon {
-            font-size: 24px;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-          }
-          
-          .rtsa-text {
-            color: white;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-          }
-          
-          .rtsa-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 20px;
-          }
-          
-          .rtsa-logo {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-          }
-          
-          .rtsa-icon-large {
-            font-size: 48px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
-          }
-          
-          .rtsa-btn {
-            background: linear-gradient(135deg, #1e40af, #1e3a8a);
-            color: white;
-            border: none;
-            box-shadow: 0 6px 20px rgba(30, 64, 175, 0.3);
-          }
-          
-          .rtsa-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(30, 64, 175, 0.4);
-          }
-          
-          .rtsa-logout {
-            background: linear-gradient(135deg, #dc2626, #b91c1c);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
-          }
-          
-          .rtsa-logout:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
-          }
-          
-          .label-icon {
-            font-size: 18px;
-            margin-right: 8px;
-          }
-          
-          .auth-subtitle {
-            color: #64748b;
-            font-size: 0.95rem;
-            margin-top: 8px;
-            font-style: italic;
-          }
-          
-          .dashboard-subtitle {
-            color: #64748b;
-            font-size: 1rem;
-            margin-top: 12px;
-            line-height: 1.5;
-          }
-          
-          .admin-dashboard h1 {
-            color: #1e40af;
-          }
-          
-          .admin-dashboard p {
-            color: #475569;
-          }
-          
-          /* Modern Admin Dashboard Styles */
-          .dashboard-header-modern {
-            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 50%, #1e293b 100%);
-            padding: 24px 32px;
-            border-radius: 16px;
-            margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 8px 32px rgba(30, 64, 175, 0.2);
-            animation: slideDown 0.6s ease-out;
-          }
-          
-          .header-content {
-            flex: 1;
-          }
-          
-          .rtsa-header-modern {
-            margin-bottom: 12px;
-          }
-          
-          .rtsa-logo-modern {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-          }
-          
-          .logo-text h1 {
-            color: white;
-            font-size: 28px;
-            font-weight: 800;
-            margin: 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          }
-          
-          .logo-text p {
-            color: #93c5fd;
-            font-size: 16px;
-            margin: 4px 0 0 0;
-            font-weight: 500;
-          }
-          
-          .dashboard-subtitle-modern {
-            color: #dbeafe;
-            font-size: 14px;
-            margin: 0;
-            font-style: italic;
-            opacity: 0.9;
-          }
-          
-          .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-          }
-          
-          .stats-summary {
-            display: flex;
-            gap: 20px;
-          }
-          
-          .stat-item {
-            text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 12px 20px;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-          }
-          
-          .stat-number {
-            display: block;
-            font-size: 24px;
-            font-weight: 800;
-            color: white;
-            line-height: 1;
-          }
-          
-          .stat-label {
-            font-size: 12px;
-            color: #dbeafe;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 4px;
-            display: block;
-          }
-          
-          .rtsa-logout-modern {
-            background: linear-gradient(135deg, #dc2626, #b91c1c);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-weight: 600;
-            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
-            transition: all 0.3s ease;
-          }
-          
-          .rtsa-logout-modern:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
-          }
-          
-          /* Navigation Tabs */
-          .admin-nav-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 24px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 8px;
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-          }
-          
-          .nav-tab {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 20px;
-            border: none;
-            background: transparent;
-            color: #64748b;
-            border-radius: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
-          }
-          
-          .nav-tab.active {
-            background: linear-gradient(135deg, #1e40af, #1e3a8a);
-            color: white;
-            box-shadow: 0 4px 16px rgba(30, 64, 175, 0.3);
-          }
-          
-          .nav-tab:hover:not(.active) {
-            background: rgba(255, 255, 255, 0.1);
-            color: #1e40af;
-          }
-          
-          .tab-icon {
-            font-size: 18px;
-          }
-          
-          /* Admin Grid Layout */
-          .admin-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-          }
-          
-          /* Stats Grid */
-          .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-          }
-          
-          .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-          }
-          
-          .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-          }
-          
-          .stat-card.primary {
-            border-color: #3b82f6;
-            background: linear-gradient(135deg, #eff6ff, #dbeafe);
-          }
-          
-          .stat-card.success {
-            border-color: #10b981;
-            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-          }
-          
-          .stat-card.warning {
-            border-color: #f59e0b;
-            background: linear-gradient(135deg, #fffbeb, #fef3c7);
-          }
-          
-          .stat-card.danger {
-            border-color: #ef4444;
-            background: linear-gradient(135deg, #fef2f2, #fee2e2);
-          }
-          
-          .stat-card .stat-icon {
-            font-size: 32px;
-            width: 60px;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            background: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          }
-          
-          .stat-info h3 {
-            margin: 0 0 4px 0;
-            font-size: 14px;
-            color: #64748b;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          
-          .stat-value {
-            font-size: 28px;
-            font-weight: 800;
-            color: #1e293b;
-            line-height: 1;
-          }
-          
-          /* Modern Sections */
-          .admin-sections-modern {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 24px;
-          }
-          
-          .section-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-            overflow: hidden;
-            transition: all 0.3s ease;
-            border: 2px solid #f1f5f9;
-          }
-          
-          .section-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            border-color: #e2e8f0;
-          }
-          
-          .section-header {
-            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-            padding: 20px 24px;
-            border-bottom: 2px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          
-          .section-header h2 {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 700;
-            color: #1e293b;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-          
-          .section-badge {
-            background: linear-gradient(135deg, #1e40af, #1e3a8a);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          
-          .section-content {
-            padding: 24px;
-            max-height: 600px;
-            overflow-y: auto;
-          }
-          
-          .section-content::-webkit-scrollbar {
-            width: 8px;
-          }
-          
-          .section-content::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 4px;
-          }
-          
-          .section-content::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-          }
-          
-          .section-content::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-          }
-          
-          /* Animations */
-          @keyframes slideDown {
-            from {
-              opacity: 0;
-              transform: translateY(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          
-          @keyframes fadeIn {
-            from {
-              opacity: 0;
-            }
-            to {
-              opacity: 1;
-            }
-          }
-          
-          .admin-dashboard {
-            animation: fadeIn 0.8s ease-out;
-          }
-          
-          /* Responsive Design */
-          @media (max-width: 768px) {
-            .dashboard-header-modern {
-              flex-direction: column;
-              gap: 20px;
-              text-align: center;
-            }
-            
-            .header-actions {
-              flex-direction: column;
-              width: 100%;
-            }
-            
-            .stats-summary {
+    <>
+      {!authenticated ? (
+        <div className="admin-login-shell">
+          <style>{`
+            .admin-login-shell {
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
               justify-content: center;
+              padding: 24px;
+              background: linear-gradient(145deg, #0f172a 0%, #134e4a 45%, #0f766e 100%);
             }
-            
-            .admin-nav-tabs {
-              flex-wrap: wrap;
-              justify-content: center;
-            }
-            
-            .stats-grid {
-              grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-            
-            .admin-sections-modern {
-              grid-template-columns: 1fr;
-            }
-          }
-          
-          /* Search and Filter Styles */
-          .search-filter-bar {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 24px;
-            padding: 20px;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-            border: 2px solid #f1f5f9;
-          }
-          
-          .search-box {
-            flex: 1;
-            position: relative;
-            display: flex;
-            align-items: center;
-          }
-          
-          .search-icon {
-            position: absolute;
-            left: 16px;
-            font-size: 18px;
-            color: #64748b;
-            z-index: 1;
-          }
-          
-          .search-input {
-            width: 100%;
-            padding: 12px 16px 12px 48px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            background: #f8fafc;
-          }
-          
-          .search-input:focus {
-            outline: none;
-            border-color: #1e40af;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
-          }
-          
-          .search-input::placeholder {
-            color: #94a3b8;
-          }
-          
-          .filter-box {
-            min-width: 180px;
-          }
-          
-          .filter-select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 500;
-            background: #f8fafc;
-            cursor: pointer;
-            transition: all 0.3s ease;
-          }
-          
-          .filter-select:focus {
-            outline: none;
-            border-color: #1e40af;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
-          }
-          
-          /* Tab Content Animation */
-          .tab-content {
-            animation: fadeIn 0.4s ease-out;
-          }
-          
-          /* Enhanced Mobile Responsive */
-          @media (max-width: 768px) {
-            .search-filter-bar {
-              flex-direction: column;
-              gap: 12px;
-            }
-            
-            .search-box {
+            .admin-login-card {
               width: 100%;
+              max-width: 440px;
+              padding: 40px;
+              border-radius: 20px;
+              background: rgba(255,255,255,0.97);
+              box-shadow: 0 25px 80px rgba(15,23,42,0.35);
             }
-            
-            .filter-box {
-              width: 100%;
+            .admin-login-card h1 { margin: 0 0 8px; font-size: 1.75rem; color: #0f172a; }
+            .admin-login-badge {
+              display: inline-flex; align-items: center; gap: 10px;
+              background: linear-gradient(135deg, #0d9488, #0f766e);
+              color: white; padding: 8px 16px; border-radius: 999px;
+              font-weight: 700; font-size: 0.85rem; margin-bottom: 20px;
             }
-          }
-        `}</style>
-        {!authenticated ? (
-          <>
-            <div className="auth-hero">
-              <div className="rtsa-badge">
-                <span className="rtsa-icon svg-icon-wrap">
-                  <IconShield />
-                </span>
-                <span className="rtsa-text">RTSA</span>
-              </div>
-              <h1>RTSA Admin Portal</h1>
-              <p>Road Transport and Safety Agency - Zambia</p>
-              <p className="auth-subtitle">Authorized personnel only. Manage accident hotspots and road safety data.</p>
+          `}</style>
+          <div className="admin-login-card">
+            <div className="admin-login-badge">
+              <IconShield /> RTSA Admin
             </div>
-            <form className="auth-form" onSubmit={handleLogin}>
-              <label>
-                <span className="label-icon svg-icon-wrap">
-                  <IconUser />
-                </span>
-                RTSA Username
+            <h1>Sign in</h1>
+            <p className="muted" style={{ marginBottom: '24px' }}>
+              Authorized personnel — manage incidents, hotspots, and map settings.
+            </p>
+            <form className="auth-form modern-form" onSubmit={handleLogin}>
+              <label className="form-label-block">
+                Username
                 <input
                   value={form.username}
-                  onChange={(e) => setForm((current) => ({ ...current, username: e.target.value }))}
-                  placeholder="Enter RTSA username"
+                  onChange={(e) => setForm((c) => ({ ...c, username: e.target.value }))}
                   required
+                  autoComplete="username"
                 />
               </label>
-              <label>
-                <span className="label-icon svg-icon-wrap">
-                  <IconLock />
-                </span>
-                RTSA Password
+              <label className="form-label-block">
+                Password
                 <input
                   type="password"
                   value={form.password}
-                  onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
-                  placeholder="Enter RTSA password"
+                  onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
                   required
+                  autoComplete="current-password"
                 />
               </label>
               {error && <p className="form-status error">{error}</p>}
-              <button type="submit" className="btn btn-primary rtsa-btn">
-                <span className="btn-icon svg-icon-wrap">
-                  <IconShield />
-                </span>
-                Access RTSA Portal
+              <button type="submit" className="btn btn-primary btn-wide">
+                Continue
               </button>
             </form>
-          </>
-        ) : (
-          <div className="admin-dashboard">
-            {/* Animated Header */}
-            <div className="dashboard-header-modern">
-              <div className="header-content">
-                <div className="rtsa-header-modern">
-                  <div className="rtsa-logo-modern">
-                    <span className="rtsa-icon-large svg-icon-wrap">
-                      <IconShield />
-                    </span>
-                    <div className="logo-text">
-                      <h1>RTSA Control Center</h1>
-                      <p>Road Transport and Safety Agency - Zambia</p>
-                    </div>
-                  </div>
-                </div>
-                <p className="dashboard-subtitle-modern">Comprehensive Road Safety Management System</p>
+          </div>
+        </div>
+      ) : (
+        <div className="admin-app">
+          <aside className="admin-sidebar-modern">
+            <div className="admin-sidebar-brand">
+              <span className="svg-icon-wrap admin-brand-icon">
+                <IconShield />
+              </span>
+              <div>
+                <div className="admin-brand-title">Control center</div>
+                <div className="admin-brand-sub">Ndola roads</div>
               </div>
-              <div className="header-actions">
-                <div className="stats-summary">
-                  <div className="stat-item">
-                    <span className="stat-number">{hotspots.length}</span>
-                    <span className="stat-label">Hotspots</span>
-                  </div>
-                  <div className="stat-item">
-                    <span className="stat-number">{accidents?.length || 0}</span>
-                    <span className="stat-label">Reports</span>
-                  </div>
-                </div>
-                <button type="button" className="btn btn-secondary rtsa-logout-modern" onClick={handleLogout}>
-                  <span className="btn-icon svg-icon-wrap">
-                    <IconLogout />
+            </div>
+
+            <nav className="admin-sidebar-nav">
+              <button
+                type="button"
+                className={`admin-side-link${activeTab === 'dashboard' ? ' active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+              >
+                <IconChart /> Overview
+              </button>
+              <button
+                type="button"
+                className={`admin-side-link${activeTab === 'accidents' ? ' active' : ''}`}
+                onClick={() => setActiveTab('accidents')}
+              >
+                <IconAlertTriangle /> Incidents
+              </button>
+              <button
+                type="button"
+                className={`admin-side-link${activeTab === 'hotspots' ? ' active' : ''}`}
+                onClick={() => setActiveTab('hotspots')}
+              >
+                <IconMapPin /> Hotspots
+              </button>
+              <button
+                type="button"
+                className={`admin-side-link${activeTab === 'analytics' ? ' active' : ''}`}
+                onClick={() => setActiveTab('analytics')}
+              >
+                <IconClipboard /> Analytics
+              </button>
+              <button
+                type="button"
+                className={`admin-side-link${activeTab === 'settings' ? ' active' : ''}`}
+                onClick={() => setActiveTab('settings')}
+              >
+                <IconSettings /> Settings
+              </button>
+            </nav>
+
+            <div className="admin-sidebar-foot">
+              <div className="admin-user-mini">{appUser?.username}</div>
+              <button type="button" className="btn btn-ghost admin-logout-side" onClick={handleLogout}>
+                <IconLogout /> Sign out
+              </button>
+            </div>
+          </aside>
+
+          <main className="admin-main-modern">
+            <header className="admin-page-head">
+              <div>
+                <h1 className="admin-page-title">{TAB_COPY[activeTab].title}</h1>
+                <p className="admin-page-sub muted">{TAB_COPY[activeTab].subtitle}</p>
+              </div>
+              <div className="admin-head-meta muted">
+                {hotspots.length} hotspots · {accidents.length} reports
+              </div>
+            </header>
+
+            {activeTab === 'analytics' && (
+              <div className="admin-toolbar glass-toolbar">
+                <div className="search-box-admin">
+                  <span className="svg-icon-wrap">
+                    <IconSearch />
                   </span>
-                  Sign out
-                </button>
-              </div>
-            </div>
-            
-            {/* Navigation Tabs */}
-            <div className="admin-nav-tabs">
-              <button 
-                type="button"
-                className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => handleTabChange('dashboard')}
-              >
-                <span className="tab-icon svg-icon-wrap">
-                  <IconChart />
-                </span>
-                <span>Dashboard</span>
-              </button>
-              <button 
-                type="button"
-                className={`nav-tab ${activeTab === 'accidents' ? 'active' : ''}`}
-                onClick={() => handleTabChange('accidents')}
-              >
-                <span className="tab-icon svg-icon-wrap">
-                  <IconAlertTriangle />
-                </span>
-                <span>Accident Reports</span>
-              </button>
-              <button 
-                type="button"
-                className={`nav-tab ${activeTab === 'hotspots' ? 'active' : ''}`}
-                onClick={() => handleTabChange('hotspots')}
-              >
-                <span className="tab-icon svg-icon-wrap">
-                  <IconMapPin />
-                </span>
-                <span>Hotspot Management</span>
-              </button>
-              <button 
-                type="button"
-                className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
-                onClick={() => handleTabChange('analytics')}
-              >
-                <span className="tab-icon svg-icon-wrap">
-                  <IconChart />
-                </span>
-                <span>Analytics</span>
-              </button>
-            </div>
-            
-            {/* Search and Filter Bar */}
-            <div className="search-filter-bar">
-              <div className="search-box">
-                <span className="search-icon svg-icon-wrap">
-                  <IconSearch />
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search accidents, hotspots..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-              <div className="filter-box">
-                <select 
+                  <input
+                    type="search"
+                    placeholder="Search road or town…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="filter-select-modern"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="filter-select"
                 >
-                  <option value="all">All Status</option>
+                  <option value="all">All statuses</option>
                   <option value="active">Active</option>
-                  <option value="resolved">Resolved</option>
                   <option value="pending">Pending</option>
+                  <option value="resolved">Resolved</option>
                 </select>
               </div>
+            )}
+
+            <div className="admin-page-body">
+              {activeTab === 'dashboard' && (
+                <div className="stack-gap">
+                  {statsCards}
+                  <section className="glass-card welcome-admin-card">
+                    <h2>Welcome back</h2>
+                    <p className="muted">
+                      Use <strong>Incidents</strong> to approve driver reports, <strong>Hotspots</strong> for corridor
+                      markers, and <strong>Settings</strong> to configure the Google Maps API key for all drivers.
+                    </p>
+                  </section>
+                </div>
+              )}
+
+              {activeTab === 'accidents' && (
+                <section className="glass-card">
+                  <div className="section-head-inline">
+                    <h2>Verification queue</h2>
+                    <span className="pill">{stats.pendingVerify} pending review</span>
+                  </div>
+                  <AccidentVerificationPanel accidents={accidents} onRefresh={loadAccidents} />
+                </section>
+              )}
+
+              {activeTab === 'hotspots' && (
+                <section className="glass-card">
+                  <HotspotAdmin
+                    hotspots={hotspots}
+                    onHotspotSaved={(updated) => {
+                      const exists = hotspots.some((h) => String(h.id) === String(updated.id));
+                      setHotspots((current) =>
+                        exists
+                          ? current.map((h) => (String(h.id) === String(updated.id) ? updated : h))
+                          : [...current, updated]
+                      );
+                    }}
+                    onHotspotDeleted={(id) => setHotspots((current) => current.filter((h) => h.id !== id))}
+                  />
+                </section>
+              )}
+
+              {activeTab === 'analytics' && (
+                <div className="stack-gap">
+                  {statsCards}
+                  <section className="glass-card">
+                    <h2>Recent reports</h2>
+                    <div className="admin-table-wrap">
+                      <table className="admin-data-table">
+                        <thead>
+                          <tr>
+                            <th>Road</th>
+                            <th>Town</th>
+                            <th>Status</th>
+                            <th>Severity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAccidents.slice(0, 25).map((a) => (
+                            <tr key={a.id}>
+                              <td>{a.roadName}</td>
+                              <td>{a.town}</td>
+                              <td>{a.status}</td>
+                              <td>{a.severity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {activeTab === 'settings' && authToken && <AdminMapSettings authToken={authToken} />}
             </div>
-            
-            {/* Main Content Grid */}
-            <div className="admin-grid">
-              {/* Quick Stats Cards */}
-              <div className="stats-grid">
-                <div className="stat-card primary">
-                  <div className="stat-icon svg-icon-wrap">
-                    <IconAlertTriangle />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Active Alerts</h3>
-                    <span className="stat-value">{stats.activeAlerts}</span>
-                  </div>
-                </div>
-                <div className="stat-card success">
-                  <div className="stat-icon svg-icon-wrap">
-                    <IconCheck />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Verified</h3>
-                    <span className="stat-value">{stats.verified}</span>
-                  </div>
-                </div>
-                <div className="stat-card warning">
-                  <div className="stat-icon svg-icon-wrap">
-                    <IconHourglass />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Pending review</h3>
-                    <span className="stat-value">{stats.pendingVerify}</span>
-                  </div>
-                </div>
-                <div className="stat-card danger">
-                  <div className="stat-icon svg-icon-wrap">
-                    <IconMapPin />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Hotspots</h3>
-                    <span className="stat-value">{stats.totalHotspots}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Main Sections */}
-              <div className="admin-sections-modern">
-                <div className="section-card">
-                  <div className="section-header">
-                    <h2>
-                      <span className="section-heading-icon svg-icon-wrap">
-                        <IconClipboard />
-                      </span>
-                      Accident verification
-                    </h2>
-                    <span className="section-badge">{filteredAccidents.length} filtered</span>
-                  </div>
-                  <div className="section-content">
-                    <AccidentVerificationPanel accidents={accidents} onRefresh={loadAccidents} />
-                  </div>
-                </div>
-                
-                <div className="section-card">
-                  <div className="section-header">
-                    <h2>
-                      <span className="section-heading-icon svg-icon-wrap">
-                        <IconMapPin />
-                      </span>
-                      Hotspot management
-                    </h2>
-                    <span className="section-badge">{hotspots.length} total</span>
-                  </div>
-                  <div className="section-content">
-                    <HotspotAdmin
-                      hotspots={hotspots}
-                      onHotspotSaved={(updated) => {
-                        const exists = hotspots.some((h) => String(h.id) === String(updated.id));
-                        setHotspots((current) =>
-                          exists ? current.map((h) => (String(h.id) === String(updated.id) ? updated : h)) : [...current, updated]
-                        );
-                      }}
-                      onHotspotDeleted={(id) => setHotspots((current) => current.filter((h) => h.id !== id))}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+          </main>
+        </div>
+      )}
+    </>
   );
 }

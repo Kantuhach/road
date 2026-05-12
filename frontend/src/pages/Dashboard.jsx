@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import NdolaGoogleMap from '../components/NdolaGoogleMap';
+import DriverShell from '../components/DriverShell';
 import websocketService from '../services/websocketService';
 import { IconAlertTriangle, IconCircleLive } from '../components/Icons';
 
@@ -16,11 +17,11 @@ export default function Dashboard({ user, onLogout }) {
   const [hotspots, setHotspots] = useState([]);
   const [accidents, setAccidents] = useState([]);
   const [statusMessage, setStatusMessage] = useState('Loading hotspot and incident data...');
-  const [authError, setAuthError] = useState('');
   const [selectedRoad, setSelectedRoad] = useState(null);
   const [nearbyAccidents, setNearbyAccidents] = useState([]);
   const [showProximityAlert, setShowProximityAlert] = useState(false);
   const [wsConnection, setWsConnection] = useState(null);
+  const [googleMapsApiKey, setGoogleMapsApiKey] = useState('');
 
   const townRoads = useMemo(() => ({
     'Town Centre': ['Main Street', 'George Road', 'Market Avenue'],
@@ -41,6 +42,16 @@ export default function Dashboard({ user, onLogout }) {
     return () => {
       websocketService.disconnect();
     };
+  }, []);
+
+  useEffect(() => {
+    axios
+      .get('/api/settings/maps')
+      .then((res) => {
+        const k = res.data?.googleMapsApiKey;
+        setGoogleMapsApiKey(typeof k === 'string' ? k.trim() : '');
+      })
+      .catch(() => setGoogleMapsApiKey(''));
   }, []);
 
   // Initialize WebSocket for real-time updates
@@ -164,65 +175,37 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
-  const highlightedAccident = accidents.length > 0 ? accidents[0] : null;
-
   const handleRoadClick = (roadName) => {
     setSelectedRoad(roadName);
     setStatusMessage(`Calculating alternative route for ${roadName}...`);
   };
 
   return (
-    <div className="dashboard-shell">
-      {/* Proximity Alert Banner */}
+    <DriverShell user={user} onLogout={onLogout}>
+      <div className={`driver-dashboard-inner${showProximityAlert && nearbyAccidents.length > 0 ? ' driver-dashboard-inner--alert' : ''}`}>
       {showProximityAlert && nearbyAccidents.length > 0 && (
-        <div style={{
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          right: '0',
-          background: 'linear-gradient(90deg, #dc2626, #ef4444)',
-          color: 'white',
-          padding: '12px 20px',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-          animation: 'slideDown 0.3s ease-out'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="driver-proximity-banner" role="alert">
+          <div className="driver-proximity-banner__inner">
             <span className="svg-icon-wrap svg-alert-banner" aria-hidden>
               <IconAlertTriangle />
             </span>
             <div>
-              <strong>ACCIDENT ALERT</strong>
-              <div style={{ fontSize: '12px', opacity: 0.9 }}>
-                {nearbyAccidents.length} accident{nearbyAccidents.length > 1 ? 's' : ''} detected within 500m of your location!
-              </div>
-              <div style={{ fontSize: '11px', opacity: 0.8 }}>
-                {nearbyAccidents.map(acc => acc.roadName).join(', ')}
+              <strong>Accident nearby</strong>
+              <div className="driver-proximity-banner__meta">
+                {nearbyAccidents.length} incident{nearbyAccidents.length > 1 ? 's' : ''} within about 500m —{' '}
+                {nearbyAccidents.map((acc) => acc.roadName).join(', ')}
               </div>
             </div>
           </div>
-          <button 
-            onClick={() => setShowProximityAlert(false)}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: '1px solid rgba(255,255,255,0.3)',
-              color: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
+          <button type="button" className="driver-proximity-banner__dismiss" onClick={() => setShowProximityAlert(false)}>
             Dismiss
           </button>
         </div>
       )}
 
-      <header className="dashboard-header" style={{ marginTop: showProximityAlert ? '60px' : '0' }}>
+      <header className="dashboard-header dashboard-header--driver">
         <div>
-          <h1>Driver Dashboard</h1>
+          <h1>Driver dashboard</h1>
           <p>Welcome back, {user.username}. Share updates and stay ahead of route disruptions.</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
             <span
@@ -260,7 +243,6 @@ export default function Dashboard({ user, onLogout }) {
             )}
           </div>
         </div>
-        <button className="btn btn-secondary" onClick={onLogout}>Sign out</button>
       </header>
 
       <main className="dashboard-grid">
@@ -282,6 +264,7 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <NdolaGoogleMap
+            googleMapsApiKey={googleMapsApiKey || undefined}
             hotspots={hotspots}
             accidents={accidents}
             onRoadClick={handleRoadClick}
@@ -411,6 +394,7 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         </aside>
       </section>
-    </div>
+      </div>
+    </DriverShell>
   );
 }

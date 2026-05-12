@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import DriverShell from '../components/DriverShell';
 
-export default function ReportPage({ user }) {
-  const navigate = useNavigate();
+export default function ReportPage({ user, onLogout }) {
   const fileRef = useRef(null);
   const [reportForm, setReportForm] = useState({
     reporterName: user.username,
@@ -115,15 +114,13 @@ export default function ReportPage({ user }) {
   };
 
   return (
-    <div className="dashboard-shell">
-      <header className="dashboard-header">
+    <DriverShell user={user} onLogout={onLogout}>
+      <div className="driver-dashboard-inner driver-report-inner">
+      <header className="dashboard-header dashboard-header--driver">
         <div>
-          <h1>Accident Report</h1>
+          <h1>Accident report</h1>
           <p>{statusMessage}</p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
-          Back to dashboard
-        </button>
       </header>
 
       <main className="dashboard-grid">
@@ -231,6 +228,7 @@ export default function ReportPage({ user }) {
           </div>
         </section>
       </main>
-    </div>
+      </div>
+    </DriverShell>
   );
 }

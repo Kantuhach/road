@@ -10,6 +10,7 @@ const WebSocketServer = require('./websocketServer');
 const authRoutes = require('./routes/auth');
 const accidentRoutes = require('./routes/accidents');
 const hotspotRoutes = require('./routes/hotspots');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +28,7 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/auth', authRoutes);
 app.use('/api/accidents', accidentRoutes);
 app.use('/api/hotspots', hotspotRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
